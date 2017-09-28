@@ -330,7 +330,8 @@ void GasAbsLookup::Adapt( const ArrayOfArrayOfSpeciesTag& current_species,
           const Index spec_type = current_species[i][0].Type();
           if (spec_type == SpeciesTag::TYPE_ZEEMAN ||
               spec_type == SpeciesTag::TYPE_FREE_ELECTRONS ||
-              spec_type == SpeciesTag::TYPE_PARTICLES)
+              spec_type == SpeciesTag::TYPE_PARTICLES ||
+              spec_type == SpeciesTag::TYPE_HITRAN_XSEC)
             {
               // Set to -1 to flag that this needs special handling later on.
               i_current_species[i] = -1;

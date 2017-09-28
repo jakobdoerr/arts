@@ -222,6 +222,7 @@ add_library (artscore STATIC
   m_fos.cc
   m_general.cc
   m_geodetic.cc
+  m_hitran_xsec.cc
   m_jacobian.cc
   m_linemixing.cc
   m_linerecord.cc
