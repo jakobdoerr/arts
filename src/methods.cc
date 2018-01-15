@@ -1810,11 +1810,10 @@ void define_md_data_raw()
        IN( "abs_xsec_per_species", "dabs_xsec_per_species_dx",
            "abs_species", "jacobian_quantities", "abs_species_active",
           "f_grid", "abs_p", "abs_t", "hitran_xsec_data" ),
-      GIN(         "T_extrapolfac", "robust" ),
-      GIN_TYPE(    "Numeric",       "Index"),
-      GIN_DEFAULT( "0.5",           "0" ),
-      GIN_DESC( "Temperature extrapolation factor (relative to grid spacing).",
-                "Set to 1 to suppress runtime errors (and return NAN values instead).")
+      GIN(),
+      GIN_TYPE(),
+      GIN_DEFAULT(),
+      GIN_DESC()
       ));
     
   md_data_raw.push_back

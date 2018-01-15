@@ -2064,7 +2064,7 @@ void Workspace::define_wsv_data()
        (
         "Dummy variable for testing the HITRAN xsec module.\n"
         ),
-      GROUP( "Matrix" )));
+      GROUP( "ArrayOfXsecRecord" )));
 
   wsv_data.push_back
    (WsvRecord

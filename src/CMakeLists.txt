@@ -195,6 +195,7 @@ add_library (artscore STATIC
   geodetic.cc
   gridded_fields.cc
   gzstream.cc
+  hitran_xsec.cc
   interpolation.cc
   interpolation_poly.cc
   jacobian.cc

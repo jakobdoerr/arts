@@ -1,5 +1,5 @@
-/* Copyright (C) 2017 Oliver Lemke <olemke@core-dump.info> and Stefan
-   Buehler <sbuehler@ltu.se>. 
+/* Copyright (C) 2017 Oliver Lemke <olemke@core-dump.info> and
+                      Stefan Buehler <stefan.buehler@uni-hamburg.de>.
 
    This program is free software; you can redistribute it and/or modify it
    under the terms of the GNU General Public License as published by the
@@ -32,6 +32,7 @@
 #include "physics_funcs.h"
 #include "auto_md.h"
 #include "xml_io.h"
+#include "hitran_xsec.h"
 
 
 extern const Numeric SPEED_OF_LIGHT;
@@ -47,10 +48,7 @@ void abs_xsec_per_speciesAddHitranXsec(// WS Output:
         const Vector& f_grid,
         const Vector& abs_p,
         const Vector& abs_t,
-        const Matrix& hitran_xsec_data,
-        // WS Generic Input:
-        const Numeric& T_extrapolfac,
-        const Index& robust,
+        const ArrayOfXsecRecord& hitran_xsec_data,
         // Verbosity object:
         const Verbosity& verbosity)
 {
@@ -79,22 +77,22 @@ void abs_xsec_per_speciesAddHitranXsec(// WS Output:
     const PropmatPartialsData ppd(jacobian_quantities);
     const bool do_jac = ppd.supportsHitranXsec();
     const bool do_freq_jac = ppd.do_frequency();
-    const bool do_temp_jac = ppd.do_temperature();
+//    const bool do_temp_jac = ppd.do_temperature();
     Vector dfreq, dabs_t;
     const Numeric df = ppd.Frequency_Perturbation();
-    const Numeric dt = ppd.Temperature_Perturbation();
+//    const Numeric dt = ppd.Temperature_Perturbation();
     if (do_freq_jac)
     {
         dfreq.resize(f_grid.nelem());
         dfreq = f_grid;
         dfreq += df;
     }
-    if (do_temp_jac)
-    {
-        dabs_t.resize(abs_t.nelem());
-        dabs_t = abs_t;
-        dabs_t += dt;
-    }
+//    if (do_temp_jac)
+//    {
+//        dabs_t.resize(abs_t.nelem());
+//        dabs_t = abs_t;
+//        dabs_t += dt;
+//    }
     // Jacobian overhead END
 
     // Useful if there is no Jacobian to calculate
@@ -122,15 +120,15 @@ void abs_xsec_per_speciesAddHitranXsec(// WS Output:
     Vector xsec_temp(f_grid.nelem(), 0.);
 
     // Jacobian vectors START
-    Vector dxsec_temp_dT;
+//    Vector dxsec_temp_dT;
     Vector dxsec_temp_dF;
     if (do_freq_jac)
         dxsec_temp_dF.resize(f_grid.nelem());
-    if (do_temp_jac)
-        dxsec_temp_dT.resize(f_grid.nelem());
+//    if (do_temp_jac)
+//        dxsec_temp_dT.resize(f_grid.nelem());
     // Jacobian vectors END
 
-    // Loop over CIA data sets.
+    // Loop over Xsec data sets.
     // Index ii loops through the outer array (different tag groups),
     // index s through the inner array (different tags within each goup).
     for (Index ii = 0; ii < abs_species_active.nelem(); ii++)
@@ -141,39 +139,23 @@ void abs_xsec_per_speciesAddHitranXsec(// WS Output:
         {
             const SpeciesTag& this_species = abs_species[i][s];
 
-            // Check if this is a CIA tag
+            // Check if this is a HITRAN cross section tag
             if (this_species.Type() != SpeciesTag::TYPE_HITRAN_XSEC)
                 continue;
 
-//            const CIARecord& this_cia = abs_cia_data[this_cia_index];
+            Index this_xdata_index = hitran_xsec_get_index(hitran_xsec_data,
+                                                           this_species.Species());
+            if (this_xdata_index < 0)
+            {
+                ostringstream os;
+                os << "Cross-section species " << this_species.Name()
+                   << " not found in *hitran_xsec_data*.";
+                throw std::runtime_error(os.str());
+            }
+            const XsecRecord& this_xdata = hitran_xsec_data[this_xdata_index];
             Matrix& this_xsec = abs_xsec_per_species[i];
             ArrayOfMatrix& this_dxsec = do_jac ? dabs_xsec_per_species_dx[i]
                                                : empty;
-
-            // Check that the dimension of this_xsec is
-            // consistent with abs_p and f_grid.
-            if (this_xsec.nrows() != f_grid.nelem())
-            {
-                ostringstream os;
-                os
-                        << "Wrong dimension of abs_xsec_per_species.nrows for species "
-                        << i << ":\n"
-                        << "should match f_grid (" << f_grid.nelem()
-                        << ") but is "
-                        << this_xsec.nrows() << ".";
-                throw runtime_error(os.str());
-            }
-            if (this_xsec.ncols() != abs_p.nelem())
-            {
-                ostringstream os;
-                os
-                        << "Wrong dimension of abs_xsec_per_species.ncols for species "
-                        << i << ":\n"
-                        << "should match abs_p (" << abs_p.nelem()
-                        << ") but is "
-                        << this_xsec.ncols() << ".";
-                throw runtime_error(os.str());
-            }
 
             // Loop over pressure:
             for (Index ip = 0; ip < abs_p.nelem(); ip++)
@@ -181,23 +163,20 @@ void abs_xsec_per_speciesAddHitranXsec(// WS Output:
                 // Get the binary absorption cross sections from the HITRAN data:
                 try
                 {
-                    // TODO OLE: CALCULATE CROSS SECTION VALUE HERE!!!!!!!!!
-                    xsec_temp = 1e-17;
-//                    this_cia.Extract(xsec_temp, f_grid, abs_t[ip],
-//                                     this_species.CIADataset(),
-//                                     T_extrapolfac, robust, verbosity);
-                    //                    if(do_freq_jac)
-                    //                        this_cia.Extract(dxsec_temp_dF, dfreq, abs_t[ip],
-                    //                                         this_species.CIADataset(),
-                    //                                         T_extrapolfac, robust, verbosity);
-                    //                    if(do_temp_jac)
-                    //                        this_cia.Extract(dxsec_temp_dT, f_grid, dabs_t[ip],
-                    //                                         this_species.CIADataset(),
-                    //                                         T_extrapolfac, robust, verbosity);
+                    this_xdata.Extract(xsec_temp, f_grid, abs_p[ip], verbosity);
+                    if (do_freq_jac)
+                        this_xdata.Extract(dxsec_temp_dF,
+                                           dfreq, abs_p[ip],
+                                           verbosity);
+                    // Temperature is not yet taken into account
+                    // if(do_temp_jac)
+                    //     this_xdata.Extract(dxsec_temp_dT, f_grid, dabs_t[ip],
+                    //                        verbosity);
                 } catch (runtime_error e)
                 {
                     ostringstream os;
-                    os << "Problem with HITRAN cross section species " << this_species.Name()
+                    os << "Problem with HITRAN cross section species "
+                       << this_species.Name()
                        << ":\n"
                        << e.what();
                     throw runtime_error(os.str());
@@ -222,9 +201,9 @@ void abs_xsec_per_speciesAddHitranXsec(// WS Output:
                                 ppd(iq) == JQT_wind_v || ppd(iq) == JQT_wind_w)
                                 this_dxsec[iq](iv, ip) += (dxsec_temp_dF[iv] -
                                                            xsec_temp[iv]) / df;
-                            else if (ppd(iq) == JQT_temperature)
-                                this_dxsec[iq](iv, ip) += (dxsec_temp_dT[iv] -
-                                                           xsec_temp[iv]) / dt;
+//                            else if (ppd(iq) == JQT_temperature)
+//                                this_dxsec[iq](iv, ip) += (dxsec_temp_dT[iv] -
+//                                                           xsec_temp[iv]) / dt;
                             else if (ppd(iq) == JQT_VMR)
                             {
                                 if (abs_species[i][0].Species() ==
