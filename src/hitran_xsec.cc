@@ -32,6 +32,7 @@ extern const Numeric PI;
 
 Numeric func_2straights(const Numeric x, const Vector& coeffs)
 {
+    assert(coeffs.nelem() == 3);
     return (x <= coeffs[0]) ? coeffs[1] * x
                             : coeffs[2] * (x - coeffs[0]) +
                               coeffs[1] * coeffs[0];
@@ -143,6 +144,33 @@ void XsecRecord::Extract(VectorView result,
             throw runtime_error(os.str());
         }
 
+        // Apply pressure dependent broadening and set negative values to zero.
+        // (These could happen due to overshooting of the higher order interpolation.)
+        const Numeric pdiff = pressure - mrefpressure[idataset];
+        const Numeric fwhm = func_2straights(pdiff, mcoeffs);
+        std::cout << mcoeffs << " - ";
+        std::cout << "pdiff: " << pdiff << " - fwhm: " << fwhm << " - fstep: "
+                  << f_grid[i_fstart] + f_grid[i_fstart + 1] << std::endl;
+        for (Index i = 0; i < result_active.nelem() - 1; ++i)
+        {
+            const Numeric x0 = f_grid[i_fstart + i];
+            Numeric lsum = 0.;
+            Numeric sumline = 0.;
+            for (Index j = 0; j < result_active.nelem(); j++)
+            {
+                result_active[j] +=
+                        xsec_interp[i] * pdf[j] * f_grid[i_fstart + i + 1] -
+                        f_grid[i_fstart + i];
+            }
+            std::cout << "fstep: "
+                      << (f_grid[i_fstart + 1] - f_grid[i_fstart]) / 1e9
+                      << " fwhm: " << fwhm / 1e9 << " pdf integral: " << sumline
+                      << std::endl;
+
+            //            if (result_active[i] < 0)
+            //                result_active[i] = 0;
+            //            std::cout << "fwhm: " << fwhm << " - pdf sum: " << lsum  * (f_grid[i_fstart+result_active.nelem()-1]-f_grid[i_fstart])/result_active.nelem()<< std::endl;
+        }
 
         // Check if frequency is inside the range covered by the data:
         chk_interpolation_grids("Frequency interpolation for cross sections",
@@ -159,32 +187,6 @@ void XsecRecord::Extract(VectorView result,
             Matrix itw(f_gp.nelem(), f_order + 1);
             interpweights(itw, f_gp);
             interp(xsec_interp, itw, mxsecs[idataset], f_gp);
-        }
-
-        // Apply pressure dependent broadening and set negative values to zero.
-        // (These could happen due to overshooting of the higher order interpolation.)
-        const Numeric pdiff = pressure - mrefpressure[idataset];
-        const Numeric fwhm = func_2straights(pdiff, mcoeffs);
-//        std::cout << mcoeffs << " - ";
-//        std::cout << "pdiff: " << pdiff << " - fwhm: " << fwhm << " - ";
-//        std::cout << "lorentz: " << lorentz_pdf(24e12, 24e12, fwhm / 2)
-//                  << std::endl;
-        for (Index i = 0; i < result_active.nelem(); ++i)
-        {
-            const Numeric x0 = f_grid[i_fstart + i];
-            Numeric lsum = 0.;
-            Numeric pdf;
-            for (Index j = 0; j < result_active.nelem(); j++)
-            {
-                pdf = lorentz_pdf(f_grid[i_fstart + j], x0, fwhm / 2);
-                lsum += pdf;
-                result_active[i] += xsec_interp[j] * pdf;
-            }
-            // Normalize integral to 1
-            result_active[i] /= lsum;
-
-            if (result_active[i] < 0)
-                result_active[i] = 0;
         }
     }
 }
