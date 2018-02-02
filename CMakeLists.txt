@@ -235,8 +235,13 @@ find_package (LAPACK REQUIRED)
 
 ########## NetCDF support #########
 if (ENABLE_NETCDF)
-   include (FindNetCDF)
+  include (FindNetCDF)
 endif (ENABLE_NETCDF)
+
+########## FFTW support #########
+if (NOT NO_FFTW)
+  include (FindFFTW)
+endif (NOT NO_FFTW)
 
 ########## OpenMP support #########
 if (NOT NO_OPENMP AND NOT CMAKE_GENERATOR STREQUAL "Xcode")
@@ -442,6 +447,12 @@ get_directory_property(ENABLE_RELMAT DIRECTORY
 get_directory_property(ENABLE_WIGNER DIRECTORY
                        3rdparty/wigxjpf
                        DEFINITION ENABLE_WIGNER)
+
+if (FFTW_FOUND)
+  message (STATUS "HITRAN XSEC enabled")
+else()
+  message (STATUS "HITRAN XSEC disabled (FFTW not found)")
+endif()
 
 if (OEM_SUPPORT)
   message (STATUS "OEM enabled")

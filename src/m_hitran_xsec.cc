@@ -26,16 +26,20 @@
 
 */
 
-#include "arts.h"
-#include "absorption.h"
-#include "messages.h"
-#include "physics_funcs.h"
-#include "auto_md.h"
-#include "xml_io.h"
-#include "hitran_xsec.h"
 
+#include "arts.h"
+#include "messages.h"
+#include "absorption.h"
+
+#ifdef ENABLE_FFTW
+
+#include "hitran_xsec.h"
+#include "auto_md.h"
+#include "physics_funcs.h"
+#include "xml_io.h"
 
 extern const Numeric SPEED_OF_LIGHT;
+
 
 /* Workspace method: Doxygen documentation will be auto-generated */
 void abs_xsec_per_speciesAddHitranXsec(// WS Output:
@@ -172,7 +176,7 @@ void abs_xsec_per_speciesAddHitranXsec(// WS Output:
                     // if(do_temp_jac)
                     //     this_xdata.Extract(dxsec_temp_dT, f_grid, dabs_t[ip],
                     //                        verbosity);
-                } catch (runtime_error e)
+                } catch (runtime_error& e)
                 {
                     ostringstream os;
                     os << "Problem with HITRAN cross section species "
@@ -224,4 +228,25 @@ void abs_xsec_per_speciesAddHitranXsec(// WS Output:
         }
     }
 }
+
+#else
+
+void abs_xsec_per_speciesAddHitranXsec(// WS Output:
+        ArrayOfMatrix&,
+        ArrayOfArrayOfMatrix&,
+        // WS Input:
+        const ArrayOfArrayOfSpeciesTag&,
+        const ArrayOfRetrievalQuantity&,
+        const ArrayOfIndex&,
+        const Vector&,
+        const Vector&,
+        const Vector&,
+        const ArrayOfXsecRecord&,
+        // Verbosity object:
+        const Verbosity&)
+{
+    throw std::runtime_error("Cross section species can only be calculated "
+                                     "if ARTS is compiled with FFTW support.");
+}
+#endif
 

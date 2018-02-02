@@ -297,6 +297,11 @@ add_dependencies (artscore auto_version_h)
 
 target_link_libraries (artscore ${ZLIB_LIBRARIES})
 
+if (FFTW_FOUND)
+  include_directories (${FFTW_INCLUDE_DIR})
+  target_link_libraries (artscore ${FFTW_LIBRARIES})
+endif()
+
 if (NETCDF_FOUND)
   target_link_libraries (artscore ${NETCDF_LIBRARIES})
 endif (NETCDF_FOUND)

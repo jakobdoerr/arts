@@ -27,6 +27,9 @@
 #define HITRAN_XSEC_H
 
 #include "arts.h"
+
+#ifdef ENABLE_FFTW
+
 #include "array.h"
 #include "mystring.h"
 #include "matpackI.h"
@@ -98,5 +101,8 @@ Index hitran_xsec_get_index(const ArrayOfXsecRecord& xsec_data,
                             const Index species);
 
 std::ostream& operator<<(std::ostream& os, const XsecRecord& xd);
+
+
+#endif // ENABLE_FFTW
 
 #endif //ARTS_HITRAN_XSEC_H

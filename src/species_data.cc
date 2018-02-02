@@ -1243,6 +1243,20 @@ void define_basic_species_data()
         ISOTOPOLOGUES
         () ) );
 
+  species_data.push_back
+    ( SpeciesRecord
+      ( NAME("HCFC22"),
+        DEGFR(0),
+        ISOTOPOLOGUES
+        () ) );
+
+  species_data.push_back
+    ( SpeciesRecord
+      ( NAME("HFC134a"),
+        DEGFR(0),
+        ISOTOPOLOGUES
+        () ) );
+
   // You also have to change the entry in the file
   // partition_function_data.cc consistently!
 }
