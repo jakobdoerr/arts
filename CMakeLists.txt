@@ -451,7 +451,11 @@ get_directory_property(ENABLE_WIGNER DIRECTORY
 if (FFTW_FOUND)
   message (STATUS "HITRAN XSEC enabled")
 else()
-  message (STATUS "HITRAN XSEC disabled (FFTW not found)")
+  if (NO_FFTW)
+    message (STATUS "HITRAN XSEC disabled")
+  else()
+    message (STATUS "HITRAN XSEC disabled (FFTW not found)")
+  endif()
 endif()
 
 if (OEM_SUPPORT)

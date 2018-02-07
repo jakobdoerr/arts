@@ -165,6 +165,26 @@ SpeciesTag::SpeciesTag(String def)
             }
         }
 
+      if ("HXSEC" == isoname)
+        {
+          mtype = TYPE_HITRAN_XSEC;
+          // Hitran Xsec flag was present, now extract the isotopologue name:
+          n    = def.find('-');    // find the '-'
+          if (n != def.npos )
+            {
+              isoname = def.substr(0,n);    // Extract before '-'
+              def.erase(0,n+1);             // Remove from def
+            }
+          else
+            {
+              // n==def.npos means that def does not contain a '-'. In that
+              // case we assume that it contains just the isotopologue name and
+              // nothing else.
+              isoname = def;
+              def  = "";
+            }
+        }
+
         if ("LM" == isoname)
         {
             mline_mixing = LINE_MIXING_ON;
@@ -434,9 +454,11 @@ String SpeciesTag::Name() const
       {
         // Zeeman flag.
         if (mtype == TYPE_ZEEMAN) os << "Z-";
-        
-        // Line Mixing Type
 
+        // Hitran Xsec flag.
+        if (mtype == TYPE_HITRAN_XSEC) os << "HXSEC-";
+
+        // Line Mixing Type
         if (mline_mixing != LINE_MIXING_OFF)
         {
             os << "LM-";

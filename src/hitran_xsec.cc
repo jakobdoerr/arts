@@ -30,6 +30,9 @@
 
 #include <fftw3.h>
 #include <complex.h>
+
+#endif  /* ENABLE_FFTW */
+
 #include "hitran_xsec.h"
 #include "absorption.h"
 #include "check_input.h"
@@ -79,6 +82,8 @@ void convolve(Vector& result, ConstVectorView xsec, ConstVectorView lorentz)
     }
     result = temp[Range(n_lorentz / 2, n_xsec, 1)];
 }
+
+#ifdef ENABLE_FFTW
 
 void fftconvolve(VectorView& result, const Vector& xsec, const Vector& lorentz)
 {
@@ -148,6 +153,9 @@ void fftconvolve(VectorView& result, const Vector& xsec, const Vector& lorentz)
     fftw_free(lorentz_out);
     fftw_free(fft_out);
 }
+
+#endif  /* ENABLE_FFTW */
+
 
 void XsecRecord::Extract(VectorView result,
                          ConstVectorView f_grid,
@@ -290,9 +298,15 @@ void XsecRecord::Extract(VectorView result,
             f_lorentz /= lsum;
 
             Vector data_result(xsec_active.nelem());
+#ifdef ENABLE_FFTW
             fftconvolve(data_result, xsec_active,
                         f_lorentz[Range(f_lorentz.nelem() / 4,
                                         f_lorentz.nelem() / 2, 1)]);
+#else
+            convolve(data_result, xsec_active,
+                        f_lorentz[Range(f_lorentz.nelem() / 4,
+                                        f_lorentz.nelem() / 2, 1)]);
+#endif  /* ENABLE_FFTW */
 
             // TODO: Add to result_active here
             // Check if frequency is inside the range covered by the data:
@@ -350,6 +364,3 @@ std::ostream& operator<<(std::ostream& os, const XsecRecord& xd)
     os << "Species: " << xd.Species() << std::endl;
     return os;
 }
-
-#endif // ENABLE_FFTW
-

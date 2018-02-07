@@ -31,12 +31,13 @@
 #include "messages.h"
 #include "absorption.h"
 
-#ifdef ENABLE_FFTW
-
 #include "hitran_xsec.h"
 #include "auto_md.h"
 #include "physics_funcs.h"
 #include "xml_io.h"
+
+
+#ifdef ENABLE_FFTW
 
 extern const Numeric SPEED_OF_LIGHT;
 
