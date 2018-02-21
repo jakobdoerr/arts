@@ -16095,8 +16095,8 @@ void define_md_data_raw()
          "said variable, e.g. before *ScatSpeciesPndAndScatAdd*.\n"
          ),
         AUTHORS( "Jana Mendrok" ),
-        OUT( "scat_species", "scat_data_raw", "scat_meta",
-             "scat_data_checked", "pnd_field_raw" ),
+        OUT( "scat_species", "scat_data_raw", "scat_data_spectral_raw",
+             "scat_meta", "scat_data_checked", "pnd_field_raw" ),
         GOUT(),
         GOUT_TYPE(),
         GOUT_DESC(),

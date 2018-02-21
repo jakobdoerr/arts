@@ -83,6 +83,9 @@ void chk_scattering_meta_data (const ScatteringMetaData& scat_meta_single,
 void chk_scat_data (const SingleScatteringData& scat_data,
                     const Verbosity& verbosity);
 
+void chk_scat_data_spectral (const SpectralSingleScatteringData& scat_data_spectral,
+                    const Verbosity& verbosity);
+
 bool is_gp_inside_cloudbox(
    const GridPos&      gp_p,
    const GridPos&      gp_lat,

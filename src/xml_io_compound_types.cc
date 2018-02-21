@@ -1566,6 +1566,122 @@ void xml_write_to_stream(ostream& os_xml,
 }
 
 
+//=== SpectralSingleScatteringData ======================================
+
+//! Reads SpectralSingleScatteringData from XML input stream
+/*!
+  \param is_xml  XML Input stream
+  \param sssdata  SpectralSingleScatteringData return value
+  \param pbifs   Pointer to binary input stream. NULL in case of ASCII file.
+*/
+void xml_read_from_stream(istream& is_xml,
+                          SpectralSingleScatteringData& sssdata,
+                          bifstream* pbifs, const Verbosity& verbosity)
+{
+    ArtsXMLTag tag(verbosity);
+    String version;
+
+    tag.read_from_stream(is_xml);
+    tag.check_name("SpectralSingleScatteringData");
+    tag.get_attribute_value("version", version);
+
+    if (version == "3")
+    {
+        String ptype_string;
+        xml_read_from_stream(is_xml, ptype_string, pbifs, verbosity);
+        sssdata.ptype = PTypeFromString(ptype_string);
+    }
+    else if (version == "2")
+    {
+        String ptype_string;
+        xml_read_from_stream(is_xml, ptype_string, pbifs, verbosity);
+        sssdata.ptype = PType2FromString(ptype_string);
+    }
+    else
+    {
+        Index ptype;
+        xml_read_from_stream(is_xml, ptype, pbifs, verbosity);
+        if (ptype != PTYPE_GENERAL &&
+            ptype != PTYPE_TOTAL_RND &&
+            ptype != PTYPE_AZIMUTH_RND)
+        {
+            ostringstream os;
+            os << "Ptype value (" << ptype << ") is wrong."
+               << "It must be \n"
+               << "10 - arbitrary oriented particles \n"
+               << "20 - totally randomly oriented particles or \n"
+               << "30 - azimuthally randomly oriented particles.\n";
+            throw runtime_error( os.str() );
+        }
+        sssdata.ptype = PType(ptype);
+    }
+    xml_read_from_stream(is_xml, sssdata.description, pbifs, verbosity);
+    xml_read_from_stream(is_xml, sssdata.f_grid, pbifs, verbosity);
+    xml_read_from_stream(is_xml, sssdata.T_grid, pbifs, verbosity);
+    xml_read_from_stream(is_xml, sssdata.coeff_inc, pbifs, verbosity);
+    /* FIXME: Check the spectral coefficients for sanity? */
+
+    xml_read_from_stream(is_xml, sssdata.coeff_sca, pbifs, verbosity);
+
+    xml_read_from_stream(is_xml, sssdata.pha_mat_data, pbifs, verbosity);
+    if (sssdata.pha_mat_data.nshelves() != sssdata.f_grid.nelem())
+    {
+        throw runtime_error("Number of frequencies in f_grid and pha_mat_data "
+                                    "not matching!!!");
+    }
+
+    xml_read_from_stream(is_xml, sssdata.ext_mat_data, pbifs, verbosity);
+    xml_read_from_stream(is_xml, sssdata.abs_vec_data, pbifs, verbosity);
+
+    tag.read_from_stream(is_xml);
+    tag.check_name("/SpectralSingleScatteringData");
+
+    chk_scat_data_spectral(sssdata, verbosity);
+}
+
+
+//! Writes SpectralSingleScatteringData to XML output stream
+/*!
+  \param os_xml  XML Output stream
+  \param sssdata  SpectralSingleScatteringData
+  \param pbofs   Pointer to binary file stream. NULL for ASCII output.
+  \param name    Optional name attribute
+*/
+void xml_write_to_stream(ostream& os_xml,
+                         const SpectralSingleScatteringData& sssdata,
+                         bofstream* pbofs,
+                         const String& name, const Verbosity& verbosity)
+{
+    ArtsXMLTag open_tag(verbosity);
+    ArtsXMLTag close_tag(verbosity);
+
+    open_tag.set_name("SpectralSingleScatteringData");
+    if (name.length())
+        open_tag.add_attribute("name", name);
+    open_tag.add_attribute("version", "3");
+    open_tag.write_to_stream(os_xml);
+
+    os_xml << '\n';
+    xml_write_to_stream(os_xml, PTypeToString(sssdata.ptype),
+                        pbofs, "", verbosity);
+    xml_write_to_stream(os_xml, sssdata.description, pbofs, "", verbosity);
+    xml_write_to_stream(os_xml, sssdata.f_grid, pbofs, "", verbosity);
+    xml_write_to_stream(os_xml, sssdata.T_grid, pbofs, "", verbosity);
+    xml_write_to_stream(os_xml, sssdata.coeff_inc, pbofs, "", verbosity);
+    xml_write_to_stream(os_xml, sssdata.coeff_sca, pbofs, "", verbosity);
+    xml_write_to_stream(os_xml, sssdata.pha_mat_data, pbofs, "", verbosity);
+    xml_write_to_stream(os_xml, sssdata.ext_mat_data, pbofs, "", verbosity);
+    xml_write_to_stream(os_xml, sssdata.abs_vec_data, pbofs, "", verbosity);
+    xml_write_to_stream(os_xml, sssdata.forward_peak_data, pbofs, "", verbosity);
+    xml_write_to_stream(os_xml, sssdata.backward_peak_data, pbofs, "", verbosity);
+
+    close_tag.set_name("/SpectralSingleScatteringData");
+    close_tag.write_to_stream(os_xml);
+    os_xml << '\n';
+}
+
+
+
 //=== ScatteringMetaData ======================================
 
 //! Reads ScatteringMetaData from XML input stream

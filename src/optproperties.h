@@ -103,6 +103,40 @@ ostream& operator<< (ostream& os, const SingleScatteringData& ssd);
 ostream& operator<< (ostream& os, const ArrayOfSingleScatteringData& assd);
 
 
+
+/*===========================================================================
+  === The SpectralSingleScatteringData structure
+  ===========================================================================*/
+
+/*!
+   Structure which describes the single scattering properties of a scattering
+   element (a single particle or a particle bulk) in a spectral representation.
+
+   The fields of the structure are described in the ARTS user guide (AUG).
+   It is listed as a sub-entry to "data structures".
+*/
+struct SpectralSingleScatteringData {
+    PType ptype;
+    String       description;
+    Vector       f_grid;
+    Vector       T_grid;
+    Matrix       coeff_inc;
+    Matrix       coeff_sca;
+    Tensor5      pha_mat_data;
+    Tensor4      ext_mat_data;
+    Tensor4      abs_vec_data;
+    Tensor4      forward_peak_data;
+    Tensor4      backward_peak_data;
+};
+
+typedef Array<SpectralSingleScatteringData> ArrayOfSpectralSingleScatteringData;
+typedef Array<Array<SpectralSingleScatteringData> > ArrayOfArrayOfSpectralSingleScatteringData;
+
+ostream& operator<< (ostream& os, const SpectralSingleScatteringData& ssd);
+ostream& operator<< (ostream& os, const ArrayOfSpectralSingleScatteringData& assd);
+
+
+
 /*===========================================================================
   === The ScatteringMetaData structure
   ===========================================================================*/
