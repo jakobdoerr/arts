@@ -16242,6 +16242,46 @@ void define_md_data_raw()
 
   md_data_raw.push_back
     ( MdRecord
+    ( NAME( "ScatSpeciesScatAndMetaReadSpectral" ),
+      DESCRIPTION
+      (
+        "Reads single scattering data and scattering meta data for one\n"
+        "scattering species.\n"
+        "\n"
+        "This method takes a string array as input containing the location\n"
+        "(path and filename) of the spectral single scattering data. Location of\n"
+        "corresponding scattering meta data is derived applying a naming\n"
+        "convention: ending '.xml*' is replaced by '.meta.xml' (search for\n"
+        "zipped files is done automatically).\n"
+        "\n"
+        "All scattering elements read in one call of the method are assigned\n"
+        "to one and the same scattering species. That is, reading in data for\n"
+        "a bunch of scattering species can be realized by multiple call of\n"
+        "this method. Assignment to scattering species is in the order of the\n"
+        "calls (i.e., first method call reads data for first *scat_species*\n"
+        "entry, second call for second scat_species entry and so on).\n"
+        "Note that no two scattering elements of the same scattering species\n"
+        "are allowed to be equal in size; this will result in an error in\n"
+        "*pnd_fieldCalcFromscat_speciesFields*\n"
+        "\n"
+        "Important note:\n"
+        "The order of the filenames for the single scattering data files has to\n"
+        "exactly correspond to the order of the scattering meta data files.\n"
+        ),
+        AUTHORS( "Daniel Kreyling, Oliver Lemke, Jana Mendrok, Jakob Doerr" ),
+        OUT( "scat_data_spectral_raw", "scat_meta" ),
+        GOUT(),
+        GOUT_TYPE(),
+        GOUT_DESC(),
+        IN( "scat_data_spectral_raw", "scat_meta" ),
+        GIN(         "scat_data_files" ),
+        GIN_TYPE(    "ArrayOfString" ),
+        GIN_DEFAULT( NODEF ),
+        GIN_DESC( "Array of single scattering data file names." )
+        ));
+
+  md_data_raw.push_back
+    ( MdRecord
     ( NAME( "scat_data_singleTmatrix" ),
       DESCRIPTION
       (

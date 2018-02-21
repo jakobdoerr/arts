@@ -449,6 +449,21 @@ void chk_scattering_data(const ArrayOfSingleScatteringData& scat_data,
 
 }
 
+void chk_spectral_scattering_data(const ArrayOfSpectralSingleScatteringData& scat_data_spectral,
+                         const ArrayOfScatteringMetaData& scat_meta,
+                         const Verbosity&)
+{
+    if (scat_data_spectral.nelem() != scat_meta.nelem())
+    {
+        ostringstream os;
+        os << "The number of elements in in current scat_species'  *scat_data_spectral* and "
+           << "*scat_meta* do not match.\n"
+           << "Each *scat_data_spectral* entry must correspond to one entry in *scat_meta*.";
+        throw runtime_error( os.str());
+    }
+
+}
+
 //! Check scattering data meta
 /*!
   FIXME

@@ -1075,6 +1075,145 @@ shared(out3, scat_data_files, arr_ssd, arr_smd)
 
 
 /* Workspace method: Doxygen documentation will be auto-generated */
+void ScatSpeciesScatAndMetaReadSpectral(//WS Output:
+        ArrayOfArrayOfSpectralSingleScatteringData &scat_data_spectral_raw,
+        ArrayOfArrayOfScatteringMetaData &scat_meta,
+        // Keywords:
+        const ArrayOfString &scat_data_files,
+        const Verbosity &verbosity) {
+  CREATE_OUT2;
+  CREATE_OUT3;
+
+  //--- Reading the data ---------------------------------------------------
+  ArrayOfSpectralSingleScatteringData arr_sssd;
+  ArrayOfScatteringMetaData arr_smd;
+
+  arr_sssd.resize(scat_data_files.nelem());
+  arr_smd.resize(scat_data_files.nelem());
+
+  Index meta_naming_conv = 0;
+
+  for (Index i = 0; i < 1 && i < scat_data_files.nelem(); i++) {
+    out3 << "  Read single scattering data file " << scat_data_files[i] << "\n";
+    xml_read_from_file(scat_data_files[i], arr_sssd[i], verbosity);
+
+    // make meta data name from scat data name
+    ArrayOfString strarr;
+    String scat_meta_file;
+
+    if (i == 0) {
+      scat_data_files[i].split(strarr, ".xml");
+      scat_meta_file = strarr[0] + ".meta.xml";
+
+      try {
+        find_xml_file(scat_meta_file, verbosity);
+      }
+      catch (runtime_error) {}
+
+      if (file_exists(scat_meta_file)) {
+        out3 << "  Read scattering meta data\n";
+
+        xml_read_from_file(scat_meta_file, arr_smd[i], verbosity);
+
+        meta_naming_conv = 1;
+      } else {
+        try {
+          scat_data_files[i].split(strarr, "scat_data");
+          if (strarr.nelem() < 2) {
+            throw std::runtime_error("Splitting scattering data filename up at 'scat_data' also failed.");
+          }
+          scat_meta_file = strarr[0] + "scat_meta" + strarr[1];
+
+          out3 << "  Read scattering meta data\n";
+          xml_read_from_file(scat_meta_file, arr_smd[i], verbosity);
+
+          meta_naming_conv = 2;
+        }
+        catch (runtime_error e) {
+          ostringstream os;
+          os << "No meta data file following one of the allowed naming "
+             << "conventions was found.\n"
+             << "Allowed are "
+             << "*.meta.xml from *.xml and "
+             << "*scat_meta* from *scat_data*\n"
+             << "Scattering meta data file not found: " << scat_meta_file
+             << "\n" << e.what();
+          throw runtime_error(os.str());
+        }
+      }
+    }
+  }
+
+  ArrayOfString fail_msg;
+
+#pragma omp parallel for                                    \
+if(!arts_omp_in_parallel() && scat_data_files.nelem() > 1)    \
+num_threads(arts_omp_get_max_threads()>16?16:arts_omp_get_max_threads()) \
+shared(out3, scat_data_files, arr_sssd, arr_smd)
+  for (Index i = 1; i < scat_data_files.nelem(); i++) {
+    // make meta data name from scat data name
+    ArrayOfString strarr;
+    String scat_meta_file;
+    SpectralSingleScatteringData sssd;
+    ScatteringMetaData smd;
+
+    try {
+      out3 << "  Read single scattering data file " << scat_data_files[i] << "\n";
+      xml_read_from_file(scat_data_files[i], sssd, verbosity);
+
+      scat_data_files[i].split(strarr, ".xml");
+      scat_meta_file = strarr[0] + ".meta.xml";
+
+      if (meta_naming_conv == 1) {
+        scat_data_files[i].split(strarr, ".xml");
+        scat_meta_file = strarr[0] + ".meta.xml";
+
+        out3 << "  Read scattering meta data\n";
+        xml_read_from_file(scat_meta_file, smd, verbosity);
+      } else {
+        scat_data_files[i].split(strarr, "scat_data");
+        scat_meta_file = strarr[0] + "scat_meta" + strarr[1];
+
+        out3 << "  Read scattering meta data\n";
+        xml_read_from_file(scat_meta_file, smd, verbosity);
+      }
+    }
+    catch (runtime_error e) {
+      ostringstream os;
+      os << "Run-time error reading scattering data : \n" << e.what();
+#pragma omp critical (ybatchCalc_push_fail_msg)
+      fail_msg.push_back(os.str());
+    }
+
+    //FIXME: currently nothing is done in chk_scattering_meta_data!
+    chk_scattering_meta_data(smd,
+                             scat_meta_file, verbosity);
+
+#pragma omp critical (ScatSpeciesScatAndMetaRead_assign_ssd)
+    arr_sssd[i] = std::move(sssd);
+#pragma omp critical (ScatSpeciesScatAndMetaRead_assign_smd)
+    arr_smd[i] = std::move(smd);
+  }
+
+  if (fail_msg.nelem()) {
+    ostringstream os;
+    for (auto &msg : fail_msg)
+      os << msg << '\n';
+
+    throw runtime_error(os.str());
+  }
+
+  // check if arrays have same size
+  chk_spectral_scattering_data(arr_sssd,
+                               arr_smd, verbosity);
+
+  // append as new scattering species
+  scat_data_spectral_raw.push_back(std::move(arr_sssd));
+  scat_meta.push_back(std::move(arr_smd));
+}
+
+
+/* Workspace method: Doxygen documentation will be auto-generated */
 void ScatElementsSelect (//WS Output:
                          ArrayOfArrayOfSingleScatteringData& scat_data_raw,
                          ArrayOfArrayOfScatteringMetaData& scat_meta,
