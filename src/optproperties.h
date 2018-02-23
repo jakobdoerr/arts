@@ -122,11 +122,16 @@ struct SpectralSingleScatteringData {
     Vector       T_grid;
     Matrix       coeff_inc;
     Matrix       coeff_sca;
-    Tensor5      pha_mat_data;
-    Tensor4      ext_mat_data;
-    Tensor4      abs_vec_data;
-    Tensor4      forward_peak_data;
-    Tensor4      backward_peak_data;
+    Tensor5      pha_mat_data_real;
+    Tensor5      pha_mat_data_imag;
+    Tensor4      ext_mat_data_real;
+    Tensor4      ext_mat_data_imag;
+    Tensor4      abs_vec_data_real;
+    Tensor4      abs_vec_data_imag;
+    Tensor4      forward_peak_data_real;
+    Tensor4      forward_peak_data_imag;
+    Tensor4      backward_peak_data_real;
+    Tensor4      backward_peak_data_imag;
 };
 
 typedef Array<SpectralSingleScatteringData> ArrayOfSpectralSingleScatteringData;

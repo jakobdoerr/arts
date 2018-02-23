@@ -688,22 +688,22 @@ void chk_scat_data_spectral(const SpectralSingleScatteringData& scat_data_spectr
 
       out3 << "  Data is for arbitrarily orientated particles. \n";
 
-          chk_size(os_pha_mat.str(), scat_data_spectral_single.pha_mat_data,
+          chk_size(os_pha_mat.str(), scat_data_spectral_single.pha_mat_data_real,
                    scat_data_spectral_single.f_grid.nelem(),
                    scat_data_spectral_single.T_grid.nelem(),
-                   scat_data_spectral_single.coeff_sca.nrows(),
-                   scat_data_spectral_single.coeff_inc.nrows(),
+                   scat_data_spectral_single.coeff_sca.ncols(),
+                   scat_data_spectral_single.coeff_inc.ncols(),
                    16);
-          chk_size(os_ext_mat.str(), scat_data_spectral_single.ext_mat_data,
+          chk_size(os_ext_mat.str(), scat_data_spectral_single.ext_mat_data_real,
                    scat_data_spectral_single.f_grid.nelem(),
                    scat_data_spectral_single.T_grid.nelem(),
-                   scat_data_spectral_single.coeff_inc.nrows(),
+                   scat_data_spectral_single.coeff_inc.ncols(),
                    7);
 
-          chk_size(os_abs_vec.str(), scat_data_spectral_single.abs_vec_data,
+          chk_size(os_abs_vec.str(), scat_data_spectral_single.abs_vec_data_real,
                    scat_data_spectral_single.f_grid.nelem(),
                    scat_data_spectral_single.T_grid.nelem(),
-                   scat_data_spectral_single.coeff_inc.nrows(),
+                   scat_data_spectral_single.coeff_inc.ncols(),
                    4);
           break;
 
@@ -713,23 +713,23 @@ void chk_scat_data_spectral(const SpectralSingleScatteringData& scat_data_spectr
            << "scattering media, i.e. for totally randomly oriented particles "
            << "with at least one plane of symmetry. \n";
 
-          chk_size(os_pha_mat.str(), scat_data_spectral_single.pha_mat_data,
+          chk_size(os_pha_mat.str(), scat_data_spectral_single.pha_mat_data_real,
                    scat_data_spectral_single.f_grid.nelem(),
                    scat_data_spectral_single.T_grid.nelem(),
-                   scat_data_spectral_single.coeff_sca.nrows(),
-                   scat_data_spectral_single.coeff_inc.nrows(),
+                   scat_data_spectral_single.coeff_sca.ncols(),
+                   scat_data_spectral_single.coeff_inc.ncols(),
                    6);
 
-          chk_size(os_ext_mat.str(), scat_data_spectral_single.ext_mat_data,
+          chk_size(os_ext_mat.str(), scat_data_spectral_single.ext_mat_data_real,
                    scat_data_spectral_single.f_grid.nelem(),
                    scat_data_spectral_single.T_grid.nelem(),
-                   scat_data_spectral_single.coeff_inc.nrows(),
+                   scat_data_spectral_single.coeff_inc.ncols(),
                    1);
 
-          chk_size(os_abs_vec.str(), scat_data_spectral_single.abs_vec_data,
+          chk_size(os_abs_vec.str(), scat_data_spectral_single.abs_vec_data_real,
                    scat_data_spectral_single.f_grid.nelem(),
                    scat_data_spectral_single.T_grid.nelem(),
-                   scat_data_spectral_single.coeff_inc.nrows(),
+                   scat_data_spectral_single.coeff_inc.ncols(),
                    1);
           break;
 
@@ -737,28 +737,28 @@ void chk_scat_data_spectral(const SpectralSingleScatteringData& scat_data_spectr
 
       out3 << "  Data is for azimuthally randomly oriented particles. \n";
 
-          chk_size(os_pha_mat.str(), scat_data_spectral_single.pha_mat_data,
+          chk_size(os_pha_mat.str(), scat_data_spectral_single.pha_mat_data_real,
                    scat_data_spectral_single.f_grid.nelem(),
                    scat_data_spectral_single.T_grid.nelem(),
-                   scat_data_spectral_single.coeff_sca.nrows(),
-                   scat_data_spectral_single.coeff_inc.nrows(),
+                   scat_data_spectral_single.coeff_sca.ncols(),
+                   scat_data_spectral_single.coeff_inc.ncols(),
                    16);
 
-          chk_size(os_ext_mat.str(), scat_data_spectral_single.ext_mat_data,
+          chk_size(os_ext_mat.str(), scat_data_spectral_single.ext_mat_data_real,
                    scat_data_spectral_single.f_grid.nelem(),
                    scat_data_spectral_single.T_grid.nelem(),
-                   scat_data_spectral_single.coeff_inc.nrows(),
+                   scat_data_spectral_single.coeff_inc.ncols(),
                    3);
 
-          chk_size(os_abs_vec.str(), scat_data_spectral_single.abs_vec_data,
+          chk_size(os_abs_vec.str(), scat_data_spectral_single.abs_vec_data_real,
                    scat_data_spectral_single.f_grid.nelem(),
                    scat_data_spectral_single.T_grid.nelem(),
-                   scat_data_spectral_single.coeff_inc.nrows(),
+                   scat_data_spectral_single.coeff_inc.ncols(),
                    2);
           break;
 
   }
-
+  // TODO: Check imaginary parts??
   // Here we only check whether the temperature grid is of the unit K, not
   // whether it corresponds to the required values in t_field. The second
   // option is not trivial since here one has to look whether the pnd_field

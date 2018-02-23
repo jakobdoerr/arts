@@ -1623,15 +1623,28 @@ void xml_read_from_stream(istream& is_xml,
 
     xml_read_from_stream(is_xml, sssdata.coeff_sca, pbifs, verbosity);
 
-    xml_read_from_stream(is_xml, sssdata.pha_mat_data, pbifs, verbosity);
-    if (sssdata.pha_mat_data.nshelves() != sssdata.f_grid.nelem())
+    xml_read_from_stream(is_xml, sssdata.pha_mat_data_real, pbifs, verbosity);
+    xml_read_from_stream(is_xml, sssdata.pha_mat_data_imag, pbifs, verbosity);
+
+    if (sssdata.pha_mat_data_real.nshelves() != sssdata.f_grid.nelem())
     {
-        throw runtime_error("Number of frequencies in f_grid and pha_mat_data "
+        throw runtime_error("Number of frequencies in f_grid and pha_mat_data_real "
                                     "not matching!!!");
     }
-
-    xml_read_from_stream(is_xml, sssdata.ext_mat_data, pbifs, verbosity);
-    xml_read_from_stream(is_xml, sssdata.abs_vec_data, pbifs, verbosity);
+    if (sssdata.pha_mat_data_imag.nshelves() != 1 &&
+                         sssdata.pha_mat_data_imag.nshelves() != sssdata.f_grid.nelem())
+    {
+        throw runtime_error("Number of frequencies in f_grid and pha_mat_data_imag "
+                                    "not matching!!!");
+    }
+    xml_read_from_stream(is_xml, sssdata.ext_mat_data_real, pbifs, verbosity);
+    xml_read_from_stream(is_xml, sssdata.ext_mat_data_imag, pbifs, verbosity);
+    xml_read_from_stream(is_xml, sssdata.abs_vec_data_real, pbifs, verbosity);
+    xml_read_from_stream(is_xml, sssdata.abs_vec_data_imag, pbifs, verbosity);
+    xml_read_from_stream(is_xml, sssdata.forward_peak_data_real, pbifs, verbosity);
+    xml_read_from_stream(is_xml, sssdata.forward_peak_data_imag, pbifs, verbosity);
+    xml_read_from_stream(is_xml, sssdata.backward_peak_data_real, pbifs, verbosity);
+    xml_read_from_stream(is_xml, sssdata.backward_peak_data_imag, pbifs, verbosity);
 
     tag.read_from_stream(is_xml);
     tag.check_name("/SpectralSingleScatteringData");
@@ -1669,11 +1682,16 @@ void xml_write_to_stream(ostream& os_xml,
     xml_write_to_stream(os_xml, sssdata.T_grid, pbofs, "", verbosity);
     xml_write_to_stream(os_xml, sssdata.coeff_inc, pbofs, "", verbosity);
     xml_write_to_stream(os_xml, sssdata.coeff_sca, pbofs, "", verbosity);
-    xml_write_to_stream(os_xml, sssdata.pha_mat_data, pbofs, "", verbosity);
-    xml_write_to_stream(os_xml, sssdata.ext_mat_data, pbofs, "", verbosity);
-    xml_write_to_stream(os_xml, sssdata.abs_vec_data, pbofs, "", verbosity);
-    xml_write_to_stream(os_xml, sssdata.forward_peak_data, pbofs, "", verbosity);
-    xml_write_to_stream(os_xml, sssdata.backward_peak_data, pbofs, "", verbosity);
+    xml_write_to_stream(os_xml, sssdata.pha_mat_data_real, pbofs, "", verbosity);
+    xml_write_to_stream(os_xml, sssdata.pha_mat_data_imag, pbofs, "", verbosity);
+    xml_write_to_stream(os_xml, sssdata.ext_mat_data_real, pbofs, "", verbosity);
+    xml_write_to_stream(os_xml, sssdata.ext_mat_data_imag, pbofs, "", verbosity);
+    xml_write_to_stream(os_xml, sssdata.abs_vec_data_real, pbofs, "", verbosity);
+    xml_write_to_stream(os_xml, sssdata.abs_vec_data_imag, pbofs, "", verbosity);
+    xml_write_to_stream(os_xml, sssdata.forward_peak_data_real, pbofs, "", verbosity);
+    xml_write_to_stream(os_xml, sssdata.forward_peak_data_imag, pbofs, "", verbosity);
+    xml_write_to_stream(os_xml, sssdata.backward_peak_data_real, pbofs, "", verbosity);
+    xml_write_to_stream(os_xml, sssdata.backward_peak_data_imag, pbofs, "", verbosity);
 
     close_tag.set_name("/SpectralSingleScatteringData");
     close_tag.write_to_stream(os_xml);
@@ -1708,7 +1726,7 @@ void xml_read_from_stream(istream& is_xml,
            << "Versions 1 and 2 are obsolete.";
         throw runtime_error(os.str());
     }
-      
+
   xml_read_from_stream(is_xml, smdata.description, pbifs, verbosity);
   xml_read_from_stream(is_xml, smdata.source, pbifs, verbosity);
   xml_read_from_stream(is_xml, smdata.refr_index, pbifs, verbosity);
@@ -1750,7 +1768,7 @@ void xml_write_to_stream(ostream& os_xml,
   xml_write_to_stream(os_xml, smdata.diameter_max, pbofs, "", verbosity);
   xml_write_to_stream(os_xml, smdata.diameter_volume_equ, pbofs, "", verbosity);
   xml_write_to_stream(os_xml, smdata.diameter_area_equ_aerodynamical, pbofs, "", verbosity);
-  
+
   close_tag.set_name("/ScatteringMetaData");
   close_tag.write_to_stream(os_xml);
   os_xml << '\n';
@@ -1771,14 +1789,14 @@ void xml_read_from_stream(istream& is_xml,
                           bifstream* pbifs, const Verbosity& verbosity)
 {
   ArtsXMLTag tag(verbosity);
-  
+
   tag.read_from_stream(is_xml);
   tag.check_name("SLIData2");
 
   xml_read_from_stream(is_xml, slidata.x1a, pbifs, verbosity);
   xml_read_from_stream(is_xml, slidata.x2a, pbifs, verbosity);
   xml_read_from_stream(is_xml, slidata.ya, pbifs, verbosity);
-  
+
   tag.read_from_stream(is_xml);
   tag.check_name("/SLIData2");
 }
@@ -1800,7 +1818,7 @@ void xml_write_to_stream(ostream& os_xml,
   xml_write_to_stream(os_xml, slidata.x1a, pbofs, "", verbosity);
   xml_write_to_stream(os_xml, slidata.x2a, pbofs, "", verbosity);
   xml_write_to_stream(os_xml, slidata.ya, pbofs, "", verbosity);
-  
+
   close_tag.set_name("/SLIData2");
   close_tag.write_to_stream(os_xml);
   os_xml << '\n';
@@ -1975,7 +1993,7 @@ void xml_write_to_stream(ostream&                 os_xml,
 
     close_tag.set_name("/SpeciesAuxData");
     close_tag.write_to_stream(os_xml);
-    
+
     os_xml << '\n';
 }
 
