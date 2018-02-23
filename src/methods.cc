@@ -16520,6 +16520,29 @@ void define_md_data_raw()
 
   md_data_raw.push_back
     ( MdRecord
+      ( NAME( "scat_data_spectralCalc" ),
+        DESCRIPTION
+        (
+        "Prepares *scat_data_spectral* for the scattering solver.\n"
+        "\n"
+        "Derives single scattering data for the frequencies given by\n"
+        "*f_grid* by interpolation from *scat_data_specrtal_raw*. *f_grid* should be\n"
+        "the actual WSV *f_grid* or a single-element Vector.\n"
+        ),
+        AUTHORS( "Jakob Doerr", "Jana Mendrok" ),
+        OUT( "scat_data_spectral" ),
+        GOUT(),
+        GOUT_TYPE(),
+        GOUT_DESC(),
+        IN( "scat_data_spectral_raw", "f_grid" ),
+        GIN( "interp_order" ),
+        GIN_TYPE( "Index" ),
+        GIN_DEFAULT( "1" ),
+        GIN_DESC( "Interpolation order." )
+        ));
+
+  md_data_raw.push_back
+    ( MdRecord
       ( NAME( "scat_dataCheck" ),
         DESCRIPTION
         (
@@ -16554,6 +16577,49 @@ void define_md_data_raw()
         GIN_DESC( "The level of checks to apply on scat_data ('sane' or 'all';"
                   " see above).",
                   "Threshold for allowed albedo deviation (see above)." )
+        ));
+
+  md_data_raw.push_back
+    ( MdRecord
+      ( NAME( "scat_data_spectralCheck" ),
+        DESCRIPTION
+        (
+        // FIXME: Adjust doc!
+        "Furthermore, by default it is checked that *scat_data_spectral* does not\n"
+        "contain any invalid values and that the scattering matrix is\n"
+        "properly normalized. Proper normalization is defined by the maximum\n"
+        "allowed albedo deviation *sca_mat_threshold* (for details see\n"
+        "*scat_data_spectralCheck*).\n"
+
+        "Method for checking the validity and consistency of the single\n"
+        "scattering properties in *scat_data*.\n"
+        "\n"
+        "This function checks that *scat_data* does not contain any NaN and\n"
+        "that the 'scalar' properties K11, Z11, and a1 are non-negative.\n"
+        "\n"
+        "When *check_type* is 'all', this function checks that the solid\n"
+        "sphere integrated scattering matrix (int_Z11), which is supposed to\n"
+        "be normalized to the scattering cross section, is sufficiently\n"
+        "consistent with the scattering cross section (C_sca) derived from\n"
+        "the difference of extinction (K11) and absorption (a1):\n"
+        "int_z11 ~ C_sca = K11-a1.\n"
+        "The check is skipped if *check_type* is 'sane'.\n"
+        "\n"
+        "Sufficient consistency is defined by the maximum allowed deviation\n"
+        "in single scattering albedo, *sca_mat_threshold*, testing for\n"
+        "  ( <int_Z11>/<C_sca>-1. ) * ( <C_sca>/<K11> ) <= sca_mat_threshold.\n"
+        ),
+        AUTHORS( "Jakob Doerr", "Claudia Emde", "Jana Mendrok" ),
+        OUT(),
+        GOUT(),
+        GOUT_TYPE(),
+        GOUT_DESC(),
+        IN( "scat_data_spectral" ),
+        GIN(         "check_type", "sca_mat_threshold" ),
+        GIN_TYPE(    "String", "Numeric" ),
+        GIN_DEFAULT( "all", "5e-2" ),
+        GIN_DESC( "The level of checks to apply on scat_data_spectral (see above).",
+        "Threshold for allowed albedo deviation (see above)." )
         ));
 
   md_data_raw.push_back

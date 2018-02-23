@@ -1439,6 +1439,110 @@ void scat_dataCheck( //Input:
 }
 
 
+/* Workspace method: Doxygen documentation will be auto-generated */
+void scat_data_spectralCheck( //Input:
+        const ArrayOfArrayOfSpectralSingleScatteringData& scat_data_spectral,
+        const String& check_type,
+        const Numeric& threshold,
+        const Verbosity& verbosity )
+{
+    CREATE_OUT0;
+    CREATE_OUT1;
+    CREATE_OUT2;
+    //CREATE_OUT3;
+
+    // FIXME:
+    // so far, this works for both scat_data and scat_data_raw. Needs to be
+    // adapted, though, once we have WSM that can create Z/K/a with different
+    // f/T dimensions than scat_data_single.f/T_grid.
+
+    const Index N_ss = scat_data_spectral.nelem();
+
+    // 1) any negative values in Z11, K11, or a1? K11>=a1?
+    // 2) scat_data containing any NaN?
+    // 3) sca_mat norm sufficiently good (int(Z11)~=K11-a1?)
+
+    // Loop over the included scattering species
+    out2 << " checking for negative values in Z11, K11, and a1, and for K11<a1\n";
+    out1 << " it does not make sense to check for negative values in spectral \n"
+            " coefficients...\n" ;
+
+    // Loop over the included scattering species
+    out2 << " checking for NaN anywhere in Z, K, and a\n";
+    for (Index i_ss = 0; i_ss < N_ss; i_ss++)
+    {
+        const Index N_se = scat_data_spectral[i_ss].nelem();
+
+        // Loop over the included scattering elements
+        for (Index i_se = 0; i_se < N_se; i_se++)
+        {
+            for (Index f = 0; f < scat_data_spectral[i_ss][i_se].f_grid.nelem(); f++)
+            {
+                    for (Index inc=0; inc<scat_data_spectral[i_ss][i_se].abs_vec_data_real.nrows(); inc++)
+                    {
+                        for (Index t = 0; t < scat_data_spectral[i_ss][i_se].T_grid.nelem(); t++)
+                        {
+                            for (Index st=0; st<scat_data_spectral[i_ss][i_se].abs_vec_data_real.ncols(); st++)
+                                if( isnan(scat_data_spectral[i_ss][i_se].abs_vec_data_real(f,t,inc,st)) )
+                                {
+                                    ostringstream os;
+                                    os << "Scatt. species #" << i_ss << " element #" << i_se
+                                       << " contains NaN in abs_vec at f#" << f << ", T#"
+                                       << t << ", coeff_inc#" << inc << ", stokes #"
+                                       << st << "\n";
+                                    throw runtime_error( os.str() );
+                                }
+                            for (Index st=0; st<scat_data_spectral[i_ss][i_se].ext_mat_data_real.ncols(); st++)
+                                if( isnan(scat_data_spectral[i_ss][i_se].ext_mat_data_real(f,t,inc,st)) )
+                                {
+                                    ostringstream os;
+                                    os << "Scatt. species #" << i_ss << " element #" << i_se
+                                       << " contains NaN in ext_mat at f#" << f << ", T#"
+                                       << t << ", coeff_inc#" << inc << ", stokes #"
+                                       << st << "\n";
+                                    throw runtime_error( os.str() );
+                                }
+                        }
+                        Index nTpha = scat_data_spectral[i_ss][i_se].pha_mat_data_real.nbooks();
+                        for (Index t = 0; t < nTpha; t++)
+                        {
+                            for (Index sca=0; sca<scat_data_spectral[i_ss][i_se].pha_mat_data_real.nshelves(); sca++)
+                                    for (Index st=0; st<scat_data_spectral[i_ss][i_se].pha_mat_data_real.ncols(); st++)
+                                        if( isnan(scat_data_spectral[i_ss][i_se].pha_mat_data_real(f,t,sca,inc,st)) )
+                                        {
+                                            ostringstream os;
+                                            os << "Scatt. species #" << i_ss << " element #" << i_se
+                                               << " contains NaN in pha_mat at f#" << f << ", T#"
+                                               << t << " (of " << nTpha << "), coeff_sca#" << sca
+                                               << ", coeff_inc#" << inc << ", stokes #" << "\n";
+                                            throw runtime_error( os.str() );
+                                        }
+                        }
+                    }
+            }
+        }
+    }
+
+    if( check_type.toupper() == "ALL" )
+    {
+        out2 << " checking normalization of scattering matrix\n";
+        out1 << "Currently, the spectral scattering data is not checked for normalisation...\n" ;
+    }
+    else if (check_type.toupper() == "SANE")
+    {
+        out1 << "  WARNING:\n"
+             << "  Normalization check on pha_mat switched off.\n"
+             << "  Scattering solution might be wrong.\n";
+    }
+    else
+    {
+        ostringstream os;
+        os << "Invalid value for argument *check_type*: '" << check_type << "'.\n";
+        os << "Valid values are 'all' or 'none'.";
+        throw runtime_error( os.str() );
+    }
+}
+
 
 /* Workspace method: Doxygen documentation will be auto-generated */
 void DoitScatteringDataPrepare(Workspace& ws,//Output:
@@ -1784,6 +1888,347 @@ void scat_dataCalc(ArrayOfArrayOfSingleScatteringData& scat_data,
       }
     }
   }
+}
+
+
+
+/* Workspace method: Doxygen documentation will be auto-generated */
+void scat_data_spectralCalc(ArrayOfArrayOfSpectralSingleScatteringData& scat_data_spectral,
+                   const ArrayOfArrayOfSpectralSingleScatteringData& scat_data_spectral_raw,
+                   const Vector& f_grid,
+                   const Index& interp_order,
+                   const Verbosity&)
+// FIXME: when we allow K, a, Z to be on different f and T grids, their use in
+// the scat solvers needs to be reviewed again and adapted to this!
+{
+    //Extrapolation factor:
+    //const Numeric extpolfac = 0.5;
+
+    Index nf=f_grid.nelem();
+
+    // Check, whether single scattering data contains the right frequencies:
+    // The check was changed to allow extrapolation at the boundaries of the
+    // frequency grid.
+    const String which_interpolation="scat_data_spectral_raw.f_grid to f_grid";
+    for (Index i_ss = 0; i_ss<scat_data_spectral_raw.nelem(); i_ss++)
+    {
+        for (Index i_se = 0; i_se<scat_data_spectral_raw[i_ss].nelem(); i_se++)
+        {
+            // Check for the special case that ssd.f_grid f_grid have only one
+            // element. If identical, that's  fine. If not, throw error.
+            if (scat_data_spectral_raw[i_ss][i_se].f_grid.nelem()==1 && nf==1)
+                if ( !is_same_within_epsilon(scat_data_spectral_raw[i_ss][i_se].f_grid[0],
+                                             f_grid[0],2*DBL_EPSILON) )
+                {
+                    ostringstream os;
+                    os << "There is a problem with the grids for the following "
+                       << "interpolation:\n" << which_interpolation << "\n"
+                       << "If original grid has only 1 element, the new grid must also have\n"
+                       << "only a single element and hold the same value as the original grid.";
+                    throw runtime_error( os.str() );
+                }
+
+            // check with extrapolation
+            chk_interpolation_grids(which_interpolation,
+                                    scat_data_spectral_raw[i_ss][i_se].f_grid, f_grid,
+                                    interp_order);
+        }
+    }
+
+    //Initialise scat_data
+    scat_data_spectral.resize(scat_data_spectral_raw.nelem());
+
+    // Loop over the included scattering species
+    for (Index i_ss = 0; i_ss<scat_data_spectral_raw.nelem(); i_ss++)
+    {
+        const Index N_se = scat_data_spectral_raw[i_ss].nelem();
+
+        //Initialise scat_data
+        scat_data_spectral[i_ss].resize(N_se);
+
+        // Loop over the included scattering elements
+        for (Index i_se = 0; i_se < N_se; i_se++)
+        {
+            //Stuff that doesn't need interpolating
+            scat_data_spectral[i_ss][i_se].ptype   = scat_data_spectral_raw[i_ss][i_se].ptype;
+            scat_data_spectral[i_ss][i_se].f_grid  = f_grid;
+            scat_data_spectral[i_ss][i_se].T_grid  = scat_data_spectral_raw[i_ss][i_se].T_grid;
+            scat_data_spectral[i_ss][i_se].coeff_inc = scat_data_spectral_raw[i_ss][i_se].coeff_inc;
+            scat_data_spectral[i_ss][i_se].coeff_sca = scat_data_spectral_raw[i_ss][i_se].coeff_sca;
+
+            //Sizing SSD data containers
+            scat_data_spectral[i_ss][i_se].pha_mat_data_real.resize(nf,
+                                scat_data_spectral_raw[i_ss][i_se].pha_mat_data_real.nbooks(),
+                                scat_data_spectral_raw[i_ss][i_se].pha_mat_data_real.npages(),
+                                scat_data_spectral_raw[i_ss][i_se].pha_mat_data_real.nrows(),
+                                scat_data_spectral_raw[i_ss][i_se].pha_mat_data_real.ncols());
+            scat_data_spectral[i_ss][i_se].ext_mat_data_real.resize(nf,
+                                scat_data_spectral_raw[i_ss][i_se].ext_mat_data_real.npages(),
+                                scat_data_spectral_raw[i_ss][i_se].ext_mat_data_real.nrows(),
+                                scat_data_spectral_raw[i_ss][i_se].ext_mat_data_real.ncols());
+            scat_data_spectral[i_ss][i_se].abs_vec_data_real.resize(nf,
+                                scat_data_spectral_raw[i_ss][i_se].abs_vec_data_real.npages(),
+                                scat_data_spectral_raw[i_ss][i_se].abs_vec_data_real.nrows(),
+                                scat_data_spectral_raw[i_ss][i_se].abs_vec_data_real.ncols());
+            scat_data_spectral[i_ss][i_se].forward_peak_data_real.resize(nf,
+                                scat_data_spectral_raw[i_ss][i_se].forward_peak_data_real.npages(),
+                                scat_data_spectral_raw[i_ss][i_se].forward_peak_data_real.nrows(),
+                                scat_data_spectral_raw[i_ss][i_se].forward_peak_data_real.ncols());
+            scat_data_spectral[i_ss][i_se].backward_peak_data_real.resize(nf,
+                                scat_data_spectral_raw[i_ss][i_se].backward_peak_data_real.npages(),
+                                scat_data_spectral_raw[i_ss][i_se].backward_peak_data_real.nrows(),
+                                scat_data_spectral_raw[i_ss][i_se].backward_peak_data_real.ncols());
+            // Imaginary containers
+            scat_data_spectral[i_ss][i_se].pha_mat_data_imag.resize(nf,
+                                scat_data_spectral_raw[i_ss][i_se].pha_mat_data_imag.nbooks(),
+                                scat_data_spectral_raw[i_ss][i_se].pha_mat_data_imag.npages(),
+                                scat_data_spectral_raw[i_ss][i_se].pha_mat_data_imag.nrows(),
+                                scat_data_spectral_raw[i_ss][i_se].pha_mat_data_imag.ncols());
+            scat_data_spectral[i_ss][i_se].ext_mat_data_imag.resize(nf,
+                                scat_data_spectral_raw[i_ss][i_se].ext_mat_data_imag.npages(),
+                                scat_data_spectral_raw[i_ss][i_se].ext_mat_data_imag.nrows(),
+                                scat_data_spectral_raw[i_ss][i_se].ext_mat_data_imag.ncols());
+            scat_data_spectral[i_ss][i_se].abs_vec_data_imag.resize(nf,
+                                scat_data_spectral_raw[i_ss][i_se].abs_vec_data_imag.npages(),
+                                scat_data_spectral_raw[i_ss][i_se].abs_vec_data_imag.nrows(),
+                                scat_data_spectral_raw[i_ss][i_se].abs_vec_data_imag.ncols());
+            scat_data_spectral[i_ss][i_se].forward_peak_data_imag.resize(nf,
+                                scat_data_spectral_raw[i_ss][i_se].forward_peak_data_imag.npages(),
+                                scat_data_spectral_raw[i_ss][i_se].forward_peak_data_imag.nrows(),
+                                scat_data_spectral_raw[i_ss][i_se].forward_peak_data_imag.ncols());
+            scat_data_spectral[i_ss][i_se].backward_peak_data_imag.resize(nf,
+                                scat_data_spectral_raw[i_ss][i_se].backward_peak_data_imag.npages(),
+                                scat_data_spectral_raw[i_ss][i_se].backward_peak_data_imag.nrows(),
+                                scat_data_spectral_raw[i_ss][i_se].backward_peak_data_imag.ncols());
+
+            const bool single_se_fgrid=(scat_data_spectral_raw[i_ss][i_se].f_grid.nelem()==1);
+            if( !single_se_fgrid )
+            {
+                // Gridpositions:
+                ArrayOfGridPosPoly freq_gp( nf );;
+                gridpos_poly(freq_gp, scat_data_spectral_raw[i_ss][i_se].f_grid, f_grid, interp_order);
+
+                // Interpolation weights:
+                Matrix itw(nf, interp_order+1);
+                interpweights(itw, freq_gp);
+
+                //Real part of Phase matrix data
+                for (Index t_index = 0; t_index < scat_data_spectral_raw[i_ss][i_se].pha_mat_data_real.nbooks(); t_index ++)
+                {
+                    for (Index i_coeff_sca = 0; i_coeff_sca < scat_data_spectral_raw[i_ss][i_se].pha_mat_data_real.npages(); i_coeff_sca++)
+                    {
+                            for (Index i_coeff_inc = 0; i_coeff_inc < scat_data_spectral_raw[i_ss][i_se].pha_mat_data_real.nrows(); i_coeff_inc++)
+                            {
+                                    for (Index i = 0; i < scat_data_spectral_raw[i_ss][i_se].pha_mat_data_real.ncols(); i++)
+                                    {
+                                        interp(scat_data_spectral[i_ss][i_se].pha_mat_data_real(joker, t_index,
+                                                                                                i_coeff_sca, i_coeff_inc, i),
+                                               itw,
+                                               scat_data_spectral_raw[i_ss][i_se].pha_mat_data_real(joker, t_index,
+                                                                                                    i_coeff_sca, i_coeff_inc, i),
+                                               freq_gp);
+                                    }
+                            }
+                    }
+                }
+
+                //Imaginary part of Phase matrix data
+                if (scat_data_spectral_raw[i_ss][i_se].pha_mat_data_imag.nbooks() > 1 )
+                {
+                    for (Index t_index = 0;
+                         t_index < scat_data_spectral_raw[i_ss][i_se].pha_mat_data_imag.nbooks(); t_index++)
+                    {
+                        for (Index i_coeff_sca = 0; i_coeff_sca <
+                                                    scat_data_spectral_raw[i_ss][i_se].pha_mat_data_imag.npages(); i_coeff_sca++)
+                        {
+                            for (Index i_coeff_inc = 0; i_coeff_inc <
+                                                        scat_data_spectral_raw[i_ss][i_se].pha_mat_data_imag.nrows(); i_coeff_inc++)
+                            {
+                                for (Index i = 0;
+                                     i < scat_data_spectral_raw[i_ss][i_se].pha_mat_data_imag.ncols(); i++)
+                                {
+                                    interp(scat_data_spectral[i_ss][i_se].pha_mat_data_imag(joker, t_index,
+                                                                                            i_coeff_sca, i_coeff_inc,
+                                                                                            i),
+                                           itw,
+                                           scat_data_spectral_raw[i_ss][i_se].pha_mat_data_imag(joker, t_index,
+                                                                                                i_coeff_sca,
+                                                                                                i_coeff_inc, i),
+                                           freq_gp);
+                                }
+                            }
+                        }
+                    }
+                }
+                //Real part of Extinction matrix data
+                for (Index t_index = 0; t_index < scat_data_spectral_raw[i_ss][i_se].ext_mat_data_real.npages(); t_index ++)
+                {
+                    for (Index i_coeff_inc = 0; i_coeff_inc < scat_data_spectral_raw[i_ss][i_se].ext_mat_data_real.nrows(); i_coeff_inc++)
+                    {
+                            for (Index i = 0; i < scat_data_spectral_raw[i_ss][i_se].ext_mat_data_real.ncols(); i++)
+                            {
+                                interp(scat_data_spectral[i_ss][i_se].ext_mat_data_real(joker, t_index,
+                                                                          i_coeff_inc, i),
+                                       itw,
+                                       scat_data_spectral_raw[i_ss][i_se].ext_mat_data_real(joker, t_index,
+                                                                              i_coeff_inc, i),
+                                       freq_gp);
+                            }
+                    }
+                }
+                //Imaginary part of Extinction matrix data
+                if (scat_data_spectral_raw[i_ss][i_se].ext_mat_data_imag.npages() > 1 )
+                {
+                    for (Index t_index = 0;
+                         t_index < scat_data_spectral_raw[i_ss][i_se].ext_mat_data_imag.npages(); t_index++)
+                    {
+                        for (Index i_coeff_inc = 0; i_coeff_inc <
+                                                    scat_data_spectral_raw[i_ss][i_se].ext_mat_data_imag.nrows(); i_coeff_inc++)
+                        {
+                            for (Index i = 0; i < scat_data_spectral_raw[i_ss][i_se].ext_mat_data_imag.ncols(); i++)
+                            {
+                                interp(scat_data_spectral[i_ss][i_se].ext_mat_data_imag(joker, t_index,
+                                                                                        i_coeff_inc, i),
+                                       itw,
+                                       scat_data_spectral_raw[i_ss][i_se].ext_mat_data_imag(joker, t_index,
+                                                                                            i_coeff_inc, i),
+                                       freq_gp);
+                            }
+                        }
+                    }
+                }
+                //Real part of Absorption vector data
+                for (Index t_index = 0; t_index < scat_data_spectral_raw[i_ss][i_se].abs_vec_data_real.npages(); t_index ++)
+                {
+                    for (Index i_coeff_inc = 0; i_coeff_inc < scat_data_spectral_raw[i_ss][i_se].abs_vec_data_real.nrows(); i_coeff_inc++)
+                    {
+                            for (Index i = 0; i < scat_data_spectral_raw[i_ss][i_se].abs_vec_data_real.ncols(); i++)
+                            {
+                                interp(scat_data_spectral[i_ss][i_se].abs_vec_data_real(joker, t_index,
+                                                                          i_coeff_inc, i),
+                                       itw,
+                                       scat_data_spectral_raw[i_ss][i_se].abs_vec_data_real(joker, t_index,
+                                                                              i_coeff_inc, i),
+                                       freq_gp);
+                            }
+                    }
+                }
+                //Imaginary part of Absorption vector data
+                if (scat_data_spectral_raw[i_ss][i_se].abs_vec_data_imag.npages() > 1 )
+                {
+                    for (Index t_index = 0;
+                         t_index < scat_data_spectral_raw[i_ss][i_se].abs_vec_data_imag.npages(); t_index++)
+                    {
+                        for (Index i_coeff_inc = 0; i_coeff_inc <
+                                                    scat_data_spectral_raw[i_ss][i_se].abs_vec_data_imag.nrows(); i_coeff_inc++)
+                        {
+                            for (Index i = 0; i < scat_data_spectral_raw[i_ss][i_se].abs_vec_data_imag.ncols(); i++)
+                            {
+                                interp(scat_data_spectral[i_ss][i_se].abs_vec_data_imag(joker, t_index,
+                                                                                        i_coeff_inc, i),
+                                       itw,
+                                       scat_data_spectral_raw[i_ss][i_se].abs_vec_data_imag(joker, t_index,
+                                                                                            i_coeff_inc, i),
+                                       freq_gp);
+                            }
+                        }
+                    }
+                }
+                //Real part of forward peak data
+                for (Index t_index = 0; t_index < scat_data_spectral_raw[i_ss][i_se].forward_peak_data_imag.npages(); t_index ++)
+                {
+                    for (Index i_coeff_inc = 0; i_coeff_inc < scat_data_spectral_raw[i_ss][i_se].forward_peak_data_imag.nrows(); i_coeff_inc++)
+                    {
+                        for (Index i = 0; i < scat_data_spectral_raw[i_ss][i_se].forward_peak_data_imag.ncols(); i++)
+                        {
+                            interp(scat_data_spectral[i_ss][i_se].forward_peak_data_imag(joker, t_index,
+                                                                                    i_coeff_inc, i),
+                                   itw,
+                                   scat_data_spectral_raw[i_ss][i_se].forward_peak_data_imag(joker, t_index,
+                                                                                        i_coeff_inc, i),
+                                   freq_gp);
+                        }
+                    }
+                }
+                //Imaginary part of forward peak data
+                if (scat_data_spectral_raw[i_ss][i_se].forward_peak_data_imag.npages() > 1 )
+                {
+                    for (Index t_index = 0;
+                         t_index < scat_data_spectral_raw[i_ss][i_se].forward_peak_data_imag.npages(); t_index++)
+                    {
+                        for (Index i_coeff_inc = 0; i_coeff_inc <
+                                                    scat_data_spectral_raw[i_ss][i_se].forward_peak_data_imag.nrows(); i_coeff_inc++)
+                        {
+                            for (Index i = 0; i < scat_data_spectral_raw[i_ss][i_se].forward_peak_data_imag.ncols(); i++)
+                            {
+                                interp(scat_data_spectral[i_ss][i_se].forward_peak_data_imag(joker, t_index,
+                                                                                        i_coeff_inc, i),
+                                       itw,
+                                       scat_data_spectral_raw[i_ss][i_se].forward_peak_data_imag(joker, t_index,
+                                                                                            i_coeff_inc, i),
+                                       freq_gp);
+                            }
+                        }
+                    }
+                }
+                //Real part of backward peak data
+                for (Index t_index = 0; t_index < scat_data_spectral_raw[i_ss][i_se].backward_peak_data_real.npages(); t_index ++)
+                {
+                    for (Index i_coeff_inc = 0; i_coeff_inc < scat_data_spectral_raw[i_ss][i_se].backward_peak_data_real.nrows(); i_coeff_inc++)
+                    {
+                        for (Index i = 0; i < scat_data_spectral_raw[i_ss][i_se].backward_peak_data_real.ncols(); i++)
+                        {
+                            interp(scat_data_spectral[i_ss][i_se].backward_peak_data_real(joker, t_index,
+                                                                                         i_coeff_inc, i),
+                                   itw,
+                                   scat_data_spectral_raw[i_ss][i_se].backward_peak_data_real(joker, t_index,
+                                                                                             i_coeff_inc, i),
+                                   freq_gp);
+                        }
+                    }
+                }
+                //Imaginary part of backward peak data
+                if (scat_data_spectral_raw[i_ss][i_se].backward_peak_data_imag.npages() > 1 )
+                {
+                    for (Index t_index = 0;
+                         t_index < scat_data_spectral_raw[i_ss][i_se].backward_peak_data_imag.npages(); t_index++)
+                    {
+                        for (Index i_coeff_inc = 0; i_coeff_inc <
+                                                    scat_data_spectral_raw[i_ss][i_se].backward_peak_data_imag.nrows(); i_coeff_inc++)
+                        {
+                            for (Index i = 0; i < scat_data_spectral_raw[i_ss][i_se].backward_peak_data_imag.ncols(); i++)
+                            {
+                                interp(scat_data_spectral[i_ss][i_se].backward_peak_data_imag(joker, t_index,
+                                                                                             i_coeff_inc, i),
+                                       itw,
+                                       scat_data_spectral_raw[i_ss][i_se].backward_peak_data_imag(joker, t_index,
+                                                                                                 i_coeff_inc, i),
+                                       freq_gp);
+                            }
+                        }
+                    }
+                }
+            }
+            else
+            {
+                assert( nf==1 );
+                // we do only have one f_grid value in old and new data (and they have
+                // been confirmed to be the same), hence only need to copy over/reassign
+                // the data.
+                scat_data_spectral[i_ss][i_se].pha_mat_data_real = scat_data_spectral_raw[i_ss][i_se].pha_mat_data_real;
+                scat_data_spectral[i_ss][i_se].ext_mat_data_real = scat_data_spectral_raw[i_ss][i_se].ext_mat_data_real;
+                scat_data_spectral[i_ss][i_se].abs_vec_data_real = scat_data_spectral_raw[i_ss][i_se].abs_vec_data_real;
+                scat_data_spectral[i_ss][i_se].forward_peak_data_real = scat_data_spectral_raw[i_ss][i_se].forward_peak_data_real;
+                scat_data_spectral[i_ss][i_se].backward_peak_data_real = scat_data_spectral_raw[i_ss][i_se].backward_peak_data_real;
+                scat_data_spectral[i_ss][i_se].pha_mat_data_imag = scat_data_spectral_raw[i_ss][i_se].pha_mat_data_imag;
+                scat_data_spectral[i_ss][i_se].ext_mat_data_imag = scat_data_spectral_raw[i_ss][i_se].ext_mat_data_imag;
+                scat_data_spectral[i_ss][i_se].abs_vec_data_imag = scat_data_spectral_raw[i_ss][i_se].abs_vec_data_imag;
+                scat_data_spectral[i_ss][i_se].forward_peak_data_imag = scat_data_spectral_raw[i_ss][i_se].forward_peak_data_imag;
+                scat_data_spectral[i_ss][i_se].backward_peak_data_imag = scat_data_spectral_raw[i_ss][i_se].backward_peak_data_imag;
+
+            }
+        }
+    }
 }
 
 
