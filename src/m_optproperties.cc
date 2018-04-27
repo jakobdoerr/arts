@@ -1462,17 +1462,20 @@ void scat_data_spectralCheck( //Input:
     // 2) scat_data containing any NaN?
     // 3) sca_mat norm sufficiently good (int(Z11)~=K11-a1?)
 
+    // 1) Not needed for scat_data_spectral
     // Loop over the included scattering species
     out2 << " checking for negative values in Z11, K11, and a1, and for K11<a1\n";
-    out1 << " it does not make sense to check for negative values in spectral \n"
+    out2 << " it does not make sense to check for negative values in spectral \n"
             " coefficients...\n" ;
 
+    // 2) Needed for scat_data_spectral
     // Loop over the included scattering species
     out2 << " checking for NaN anywhere in Z, K, and a\n";
     for (Index i_ss = 0; i_ss < N_ss; i_ss++)
     {
         const Index N_se = scat_data_spectral[i_ss].nelem();
 
+        // FIXME: So far only the real fields are checked!!!
         // Loop over the included scattering elements
         for (Index i_se = 0; i_se < N_se; i_se++)
         {
@@ -1525,6 +1528,7 @@ void scat_data_spectralCheck( //Input:
 
     if( check_type.toupper() == "ALL" )
     {
+        // 3) FIXME: Currently NOT checked for scat_data_spectral
         out2 << " checking normalization of scattering matrix\n";
         out1 << "Currently, the spectral scattering data is not checked for normalisation...\n" ;
     }

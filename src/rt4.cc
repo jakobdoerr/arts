@@ -219,6 +219,170 @@ void check_rt4_input( // Output
   //------------- end of checks ---------------------------------------
 }
 
+//! check_rt4_inputSpectral
+/*!
+  Checks that input of RT4Calc* is sane.
+
+  \param nhstreams             Number of single hemisphere streams (quadrature angles).
+  \param nhza                  Number of single hemisphere additional angles with RT output.
+  \param nummu                 Total number of single hemisphere angles with RT output.
+  \param cloudbox_on           as the WSV
+  \param rt4_is_initialized    as the WSV
+  \param atmfields_checked     as the WSV
+  \param atmgeom_checked       as the WSV
+  \param cloudbox_checked      as the WSV
+  \param nstreams              Total number of quadrature angles (both hemispheres).
+  \param quad_type             Quadrature method.
+  \param pnd_ncols             Number of columns (latitude points) in *pnd_field*.
+  \param ifield_npages         Number of pages (polar angle points) in *doit_i_field*.
+
+  \author Jana Mendrok
+  \date   2017-02-22
+*/
+void check_rt4_inputSpectral( // Output
+                      Index& nhstreams,
+                      Index& nhza,
+                      Index& nummu,
+                      // Input
+                      const Index& cloudbox_on,
+                      const Index& atmfields_checked,
+                      const Index& atmgeom_checked,
+                      const Index& cloudbox_checked,
+                      const Index& scat_data_checked,
+                      const ArrayOfIndex& cloudbox_limits,
+                      const ArrayOfArrayOfSpectralSingleScatteringData& scat_data_spectral,
+                      const Index& atmosphere_dim,
+                      const Index& stokes_dim,
+                      const Index& nstreams,
+                      const String& quad_type,
+                      const Index& add_straight_angles,
+                      const Index& pnd_ncols )
+{
+  // Don't do anything if there's no cloudbox defined.
+  //if (!cloudbox_on) return;
+  // Seems to loopholy to just skip the scattering, so rather throw an error
+  // (assuming if RT4 is called than it's expected that a scattering calc is
+  // performed. semi-quietly skipping can easily be missed and lead to wrong
+  // conclusions.).
+  if (!cloudbox_on)
+  {
+    throw runtime_error( "Cloudbox is off, no scattering calculations to be"
+                         " performed." );
+  }
+
+  if( atmfields_checked != 1 )
+    throw runtime_error( "The atmospheric fields must be flagged to have"
+                         " passed a consistency check (atmfields_checked=1)." );
+  if( atmgeom_checked != 1 )
+    throw runtime_error( "The atmospheric geometry must be flagged to have"
+                         " passed a consistency check (atmgeom_checked=1)." );
+  if( cloudbox_checked != 1 )
+    throw runtime_error( "The cloudbox must be flagged to have"
+                         " passed a consistency check (cloudbox_checked=1)." );
+  if( scat_data_checked != 1 )
+    throw runtime_error( "The scat_data must be flagged to have "
+                         "passed a consistency check (scat_data_checked=1)." );
+
+  if( atmosphere_dim != 1   )
+    throw runtime_error( "For running RT4, atmospheric dimensionality"
+                         " must be 1.\n");
+
+  if (stokes_dim < 0 || stokes_dim > 2)
+    throw runtime_error( "For running RT4, the dimension of stokes vector"
+                         " must be 1 or 2.\n");
+
+  if( cloudbox_limits[0] != 0   )
+    {
+      ostringstream os;
+      os << "RT4 calculations currently only possible with"
+         << " lower cloudbox limit\n"
+         << "at 0th atmospheric level"
+         << " (assumes surface there, ignoring z_surface).\n";
+      throw runtime_error(os.str());
+    }
+
+  if ( cloudbox_limits.nelem()!= 2*atmosphere_dim )
+    throw runtime_error(
+                        "*cloudbox_limits* is a vector which contains the"
+                        " upper and lower limit of the cloud for all"
+                        " atmospheric dimensions. So its dimension must"
+                        " be 2 x *atmosphere_dim*");
+
+  if ( scat_data_spectral.empty() )
+    throw runtime_error(
+                         "No spectral single scattering data present.\n"
+                         "See documentation of WSV *scat_data* for options to"
+                         " make single scattering data available.\n"
+                         );
+
+  if( pnd_ncols != 1 )
+    throw runtime_error("*pnd_field* is not 1D! \n"
+                        "RT4 can only be used for 1D!\n" );
+
+  if( quad_type.length()>1 )
+    {
+      ostringstream os;
+      os << "Input parameter *quad_type* not allowed to contain more than a"
+         << " single character.\n"
+         << "Yours has " << quad_type.length() << ".\n";
+      throw runtime_error(os.str());
+    }
+
+  if( quad_type=="D" || quad_type=="G" )
+    {
+      if( add_straight_angles )
+        nhza=1;
+      else
+        nhza=0;
+    }
+  else if( quad_type=="L" )
+    {
+      nhza=0;
+    }
+  else
+    {
+      ostringstream os;
+      os << "Unknown quadrature type: " << quad_type
+         << ".\nOnly D, G, and L allowed.\n";
+      throw runtime_error( os.str() );
+    }
+
+  // RT4 actually uses number of angles in single hemisphere. However, we don't
+  // want a bunch of different approaches used in the interface, so we apply the
+  // DISORT (and ARTS) way of total number of angles here. Hence, we have to
+  // ensure here that total number is even.
+  if( nstreams/2*2 != nstreams )
+    {
+      ostringstream os;
+      os << "RT4 requires an even number of streams, but yours is "
+         << nstreams << ".\n";
+      throw runtime_error( os.str() );
+    }
+  nhstreams=nstreams/2;
+  // nummu is the total number of angles in one hemisphere, including both
+  // the quadrature angles and the "extra" angles.
+  nummu=nhstreams+nhza;
+
+  // RT4 can only completely or azimuthally randomly oriented particles.
+  bool no_p10=true;
+  for( Index i_ss = 0; i_ss < scat_data_spectral.nelem(); i_ss++ )
+    for( Index i_se = 0; i_se < scat_data_spectral[i_ss].nelem(); i_se++ )
+      if( scat_data_spectral[i_ss][i_se].ptype != PTYPE_TOTAL_RND &&
+          scat_data_spectral[i_ss][i_se].ptype != PTYPE_AZIMUTH_RND )
+        no_p10=false;
+  if( !no_p10 )
+    {
+      ostringstream os;
+      os << "RT4 can only handle scattering elements of type "
+         << PTYPE_TOTAL_RND << " (" << PTypeToString(PTYPE_TOTAL_RND) << ") and\n"
+         << PTYPE_AZIMUTH_RND << " (" << PTypeToString(PTYPE_AZIMUTH_RND) << "),\n"
+         << "but at least one element of other type (" << PTYPE_GENERAL
+         << "=" << PTypeToString(PTYPE_GENERAL) << ") is present.\n";
+      throw runtime_error( os.str() );
+    }
+
+  //------------- end of checks ---------------------------------------
+}
 
 //! get_quad_angles
 /*!
@@ -1509,6 +1673,144 @@ void run_rt4_new( Workspace& ws,
                   down_rad(num_layers-k,j,ist)*rad_l2f;
               }
     }
+}
+
+//! run_rt4_spectral
+/*!
+  Prepares actual input variables for RT4, runs it, and sorts the output into
+  doit_i_field.
+
+  \param ws                    Current workspace
+  \param doit_i_field          as the WSV
+  \param f_grid                as the WSV
+  \param p_grid                as the WSV
+  \param z_field               as the WSV
+  \param t_field               as the WSV
+  \param vmr_field             as the WSV
+  \param pnd_field             as the WSV
+  \param scat_data_spectral    as the WSV
+  \param propmat_clearsky_agenda  as the WSA
+  \param cloudbox_limits       as the WSV
+  \param stokes_dim            as the WSV
+  \param nummu                 Total number of single hemisphere angles with RT output.
+  \param nhza                  Number of single hemisphere additional angles with RT output.
+  \param ground_type           Surface reflection type flag.
+  \param surface_skin_t        as the WSV
+  \param ground_albedo         Scalar surface albedo (for ground_type=L).
+  \param ground_reflec         Vector surface relfectivity (for ground_type=S).
+  \param ground_index          Surface complex refractive index (for ground_type=F).
+  \param surf_refl_mat         Surface reflection matrix (for ground_type=A).
+  \param surf_emis_vec         Surface emission vector (for ground_type=A).
+  \param quad_type             Quadrature method.
+  \param scat_za_grid          as the WSV
+  \param mu_values             Quadrature angle cosines.
+  \param quad_weights          Quadrature weights associated with mu_values.
+  \param auto_inc_nstreams     as the WSV
+  \param pfct_method           see RT4Calc doc.
+  \param pfct_aa_grid_size     see RT4Calc doc.
+  \param pfct_threshold        Requested scatter_matrix norm accuracy (in terms of single scat albedo).
+  \param max_delta_tau         see RT4Calc doc.
+
+  \author Jana Mendrok
+  \date   2017-02-22
+*/
+void run_rt4_spectral( Workspace& ws,
+              // Output
+              Tensor7& doit_i_field,
+              Vector& scat_za_grid,
+              // Input
+              ConstVectorView f_grid,
+              ConstVectorView p_grid,
+              ConstTensor3View z_field,
+              ConstTensor3View t_field,
+              ConstTensor4View vmr_field,
+              ConstTensor4View pnd_field,
+              const ArrayOfArrayOfSpectralSingleScatteringData& scat_data_spectral,
+              const Agenda& propmat_clearsky_agenda,
+              const ArrayOfIndex& cloudbox_limits,
+              const Index& stokes_dim,
+              const Index& nummu,
+              const Index& nhza,
+              const String& ground_type,
+              const Numeric& surface_skin_t,
+              ConstVectorView ground_albedo,
+              ConstTensor3View ground_reflec,
+              ConstComplexVectorView ground_index,
+              ConstTensor5View surf_refl_mat,
+              ConstTensor3View surf_emis_vec,
+              const Agenda& surface_rtprop_agenda,
+              const Numeric& surf_altitude,
+              const String& quad_type,
+              Vector& mu_values,
+              ConstVectorView quad_weights,
+              const Index& auto_inc_nstreams,
+              const Index& robust,
+              const Index& za_interp_order,
+              const Index& cos_za_interp,
+              const String& pfct_method,
+              const Index& pfct_aa_grid_size,
+              const Numeric& pfct_threshold,
+              const Numeric& max_delta_tau,
+              const Index& new_optprop,
+              const Verbosity& verbosity )
+{
+  // Input variables for RT4
+  Index num_layers=p_grid.nelem()-1;
+
+  // Top of the atmosphere temperature
+  //  FIXME: so far hard-coded to cosmic background. However, change that to set
+  //  according to/from space_agenda.
+  // to do so, we need to hand over sky_radiance instead of sky_temp as
+  // Tensor3(2,stokes_dim,nummu) per frequency. That is, for properly using
+  // iy_space_agenda, we need to recall the agenda over the stream angles (not
+  // sure what to do with the upwelling ones. according to the RT¤-internal
+  // sizing, sky_radiance contains even those. but they might not be used
+  // (check!) and hence be set arbitrary.
+  const Numeric sky_temp = COSMIC_BG_TEMP;
+
+  // Data fields
+  Vector height(num_layers+1);
+  Vector temperatures(num_layers+1);
+  for (Index i = 0; i < height.nelem(); i++)
+    {
+      height[i] = z_field(num_layers-i,0,0);
+      temperatures[i] = t_field(num_layers-i,0,0);
+    }
+
+  // this indexes all cloudbox layers as cloudy layers.
+  // optional FIXME: to use the power of RT4 (faster solving scheme for
+  // individual non-cloudy layers), one should consider non-cloudy layers within
+  // cloudbox. That requires some kind of recognition and index setting based on
+  // pnd_field or (derived) cloud layer extinction or scattering.
+  // we use something similar with iyHybrid. have a look there...
+  const Index num_scatlayers=pnd_field.npages()-1;
+  Vector scatlayers(num_layers, 0.);
+  Vector gas_extinct(num_layers, 0.);
+  Tensor6 scatter_matrix(num_scatlayers,4,nummu,stokes_dim,nummu,stokes_dim, 0.);
+  Tensor6 extinct_matrix(1,num_scatlayers,2,nummu,stokes_dim,stokes_dim, 0.);
+  Tensor5 emis_vector(1,num_scatlayers,2,nummu,stokes_dim, 0.);
+
+  // if there is no scatt particle at all, we don't need to calculate the
+  // scat properties (FIXME: that should rather be done by a proper setting
+  // of scat_layers).
+  Vector pnd_per_level(pnd_field.npages());
+  for(Index clev=0; clev<pnd_field.npages(); clev++)
+    pnd_per_level[clev]=pnd_field(joker,clev,0,0).sum();
+  Numeric pndtot=pnd_per_level.sum();
+
+  for (Index i = 0; i < cloudbox_limits[1]-cloudbox_limits[0]; i++)
+    {
+      scatlayers[num_layers-1-cloudbox_limits[0]-i] = float(i+1);
+    }
+
+// Output variables
+  Tensor3 up_rad(num_layers+1,nummu,stokes_dim, 0.);
+  Tensor3 down_rad(num_layers+1,nummu,stokes_dim, 0.);
+
+  Tensor6 extinct_matrix_allf;
+  Tensor5 emis_vector_allf;
+
+  cout << "I am in run_rt4_spectral now! \n";
 }
 
 //! scat_za_grid_adjust
