@@ -43,6 +43,7 @@
 #include "optproperties.h"
 #include "rt4.h"
 #include "rte.h"
+#include "spectral.h"
 
 using std::ostringstream;
 using std::runtime_error;
@@ -1809,6 +1810,26 @@ void run_rt4_spectral( Workspace& ws,
 
   Tensor6 extinct_matrix_allf;
   Tensor5 emis_vector_allf;
+  if( new_optprop && !auto_inc_nstreams )
+  {
+    extinct_matrix_allf.resize(f_grid.nelem(), num_scatlayers, 2, nummu,
+                               stokes_dim, stokes_dim);
+    emis_vector_allf.resize(f_grid.nelem(), num_scatlayers, 2, nummu,
+                            stokes_dim);
+    par_optpropCalcSpectral( emis_vector_allf, extinct_matrix_allf,
+                     //scatlayers,
+                     scat_data_spectral, scat_za_grid, -1,
+                     pnd_field,
+                     t_field(Range(0,num_layers+1),joker,joker),
+                     cloudbox_limits, stokes_dim );
+    if( emis_vector_allf.nshelves()==1 ) // scat_data had just a single freq
+                                         // point. copy into emis/ext here and
+                                         // don't touch anymore later on.
+    {
+      emis_vector = emis_vector_allf(Range(0,1),joker,joker,joker,joker);
+      extinct_matrix = extinct_matrix_allf(Range(0,1),joker,joker,joker,joker,joker);
+    }
+  }
 
   cout << "I am in run_rt4_spectral now! \n";
 }
@@ -2163,6 +2184,77 @@ void par_optpropCalc2(Tensor5View emis_vector,
           }
 //    }
   }
+}
+
+
+//! par_optpropCalcSpectral
+/*!
+  Calculates layer averaged particle extinction and absorption (extinct_matrix
+  and emis_vector)). These variables are required as input for the RT4 subroutine.
+
+  \param emis_vector           Layer averaged particle absorption for all particle layers
+  \param extinct_matrix        Layer averaged particle extinction for all particle layers
+  \param scat_data_spectral    as the WSV
+  \param scat_za_grid          as the WSV
+  \param f_index               index of frequency grid point handeled
+  \param pnd_field             as the WSV
+  \param t_field               as the WSV
+  \param cloudbox_limits       as the WSV
+  \param stokes_dim            as the WSV
+  \param nummu                 Number of single hemisphere polar angles.
+
+  \author Jana Mendrok, Jakob Doerr
+  \date   2018-05-04
+*/
+void par_optpropCalcSpectral(Tensor5View emis_vector,
+                      Tensor6View extinct_matrix,
+                      //VectorView scatlayers,
+                      const ArrayOfArrayOfSpectralSingleScatteringData& scat_data_spectral,
+                      const Vector& scat_za_grid,
+                      const Index& f_index,
+                      ConstTensor4View pnd_field,
+                      ConstTensor3View t_field,
+                      const ArrayOfIndex& cloudbox_limits,
+                      const Index& stokes_dim )
+{
+    // Initialization
+    extinct_matrix=0.;
+    emis_vector=0.;
+
+    const Index Np_cloud = pnd_field.npages();
+    const Index nummu = scat_za_grid.nelem()/2;
+
+    assert( emis_vector.nbooks() == Np_cloud-1 );
+    assert( extinct_matrix.nshelves() == Np_cloud-1 );
+
+    // preparing input data
+    Vector T_array =  t_field(Range(cloudbox_limits[0],Np_cloud), 0, 0);
+    Matrix dir_array(scat_za_grid.nelem(), 2, 0.);
+    dir_array(joker,0) = scat_za_grid;
+
+    // making output containers
+    ArrayOfArrayOfTensor5 ext_mat_Nse;
+    ArrayOfArrayOfTensor4 abs_vec_Nse;
+    ArrayOfArrayOfIndex ptypes_Nse;
+    Matrix t_ok;
+    ArrayOfTensor5 ext_mat_ssbulk;
+    ArrayOfTensor4 abs_vec_ssbulk;
+    ArrayOfIndex ptype_ssbulk;
+    Tensor5 ext_mat_bulk;
+    Tensor4 abs_vec_bulk;
+    Index ptype_bulk;
+
+    opt_prop_NScatElemsSpectral( ext_mat_Nse, abs_vec_Nse, ptypes_Nse, t_ok,
+                       scat_data_spectral, stokes_dim, T_array, f_index );
+    opt_prop_ScatSpecBulk( ext_mat_ssbulk, abs_vec_ssbulk, ptype_ssbulk,
+                         ext_mat_Nse, abs_vec_Nse, ptypes_Nse,
+                         pnd_field(joker, joker, 0, 0), t_ok );
+    opt_prop_Bulk( ext_mat_bulk, abs_vec_bulk, ptype_bulk,
+                 ext_mat_ssbulk, abs_vec_ssbulk, ptype_ssbulk );
+
+    par_optpropSpecToGrid(extinct_matrix,emis_vector,ext_mat_bulk,abs_vec_bulk,dir_array(joker,0),
+    dir_array(joker,1));
+
 }
 
 

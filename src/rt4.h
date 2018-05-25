@@ -218,6 +218,19 @@ void par_optpropCalc2( //Output
                       const ArrayOfIndex& cloudbox_limits,
                       const Index& stokes_dim );
 
+void par_optpropCalcSpectral( //Output
+                      Tensor5View emis_vector,
+                      Tensor6View extinct_matrix,
+                      //VectorView scatlayers,
+                      //Input
+                      const ArrayOfArrayOfSpectralSingleScatteringData& scat_data_spectral,
+                      const Vector& scat_za_grid,
+                      const Index& f_index,
+                      ConstTensor4View pnd_field,
+                      ConstTensor3View t_field,
+                      const ArrayOfIndex& cloudbox_limits,
+                      const Index& stokes_dim );
+
 void sca_optpropCalc( //Output
                       Tensor6View scatter_matrix,
                       Index& pfct_failed,

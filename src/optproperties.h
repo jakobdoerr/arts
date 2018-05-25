@@ -207,6 +207,18 @@ void opt_prop_NScatElems(//Output
                          const Index& f_index,
                          const Index& t_interp_order=1);
 
+void opt_prop_NScatElemsSpectral(//Output
+                         ArrayOfArrayOfTensor5& ext_mat,
+                         ArrayOfArrayOfTensor4& abs_vec,
+                         ArrayOfArrayOfIndex& ptypes,
+                         Matrix& t_ok,
+                         //Input
+                         const ArrayOfArrayOfSpectralSingleScatteringData& scat_data_spectral,
+                         const Index& stokes_dim,
+                         const Vector& T_array,
+                         const Index& f_index,
+                         const Index& t_interp_order=1);
+
 void opt_prop_1ScatElem(//Output
                         Tensor5View ext_mat,
                         Tensor4View abs_vec,
@@ -216,6 +228,17 @@ void opt_prop_1ScatElem(//Output
                         const SingleScatteringData& ssd,
                         const Vector& T_array,
                         const Matrix& dir_array,
+                        const Index& f_index,
+                        const Index& t_interp_order=1);
+
+void opt_prop_1ScatElemSpectral(//Output
+                        Tensor5View ext_mat,
+                        Tensor4View abs_vec,
+                        Index& ptype,
+                        VectorView t_ok,
+                        //Input
+                        const SpectralSingleScatteringData& ssd,
+                        const Vector& T_array,
                         const Index& f_index,
                         const Index& t_interp_order=1);
 
