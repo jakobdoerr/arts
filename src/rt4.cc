@@ -2242,6 +2242,7 @@ void par_optpropCalcSpectral(Tensor5View emis_vector,
     ArrayOfIndex ptype_ssbulk;
     Tensor5 ext_mat_bulk;
     Tensor4 abs_vec_bulk;
+
     Index ptype_bulk;
 
     opt_prop_NScatElemsSpectral( ext_mat_Nse, abs_vec_Nse, ptypes_Nse, t_ok,
@@ -2252,7 +2253,12 @@ void par_optpropCalcSpectral(Tensor5View emis_vector,
     opt_prop_Bulk( ext_mat_bulk, abs_vec_bulk, ptype_bulk,
                  ext_mat_ssbulk, abs_vec_ssbulk, ptype_ssbulk );
 
-    par_optpropSpecToGrid(extinct_matrix,emis_vector,ext_mat_bulk,abs_vec_bulk,dir_array(joker,0),
+    Tensor6 extinct_matrix_temp(abs_vec_bulk.nbooks(),Np_cloud,nummu,nummu,
+                                ext_mat_bulk.nrows(),ext_mat_bulk.ncols());
+    Tensor5 emis_vec_temp(abs_vec_bulk.nbooks(),Np_cloud,nummu,nummu,
+                          abs_vec_bulk.ncols());
+
+    par_optpropSpecToGrid(extinct_matrix_temp,emis_vec_temp,ext_mat_bulk,abs_vec_bulk,dir_array(joker,0),
     dir_array(joker,1));
 
 }

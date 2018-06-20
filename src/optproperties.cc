@@ -409,7 +409,7 @@ void opt_prop_NScatElemsSpectral(//Output
                 = abs_vec_tmp(joker, joker, ndir, joker);
     }
     assert( i_se_flat == Nse_all );
-
+    cout << scat_data_spectral[0][0].ext_mat_data_real(0,0,joker,0) << "\n";
 
 }
 
