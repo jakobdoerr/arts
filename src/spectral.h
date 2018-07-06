@@ -45,11 +45,12 @@ void spec_to_grid(//Output
         const Vector& za_grid,
         const Vector& aa_grid);
 
-void par_optpropSpecToGrid(//Output
+void opt_prop_SpecToGrid(//Output
         Tensor6View ext_matrix,
         Tensor5View abs_vector,
         //Input
         const Tensor5& ext_matrix_spectral,
         const Tensor4& abs_vector_spectral,
         const Vector& za_grid,
-        const Vector& aa_grid);
+        const Vector& aa_grid,
+        const bool& any_m);

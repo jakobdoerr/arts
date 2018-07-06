@@ -1810,7 +1810,7 @@ void run_rt4_spectral( Workspace& ws,
 
   Tensor6 extinct_matrix_allf;
   Tensor5 emis_vector_allf;
-  if( new_optprop && !auto_inc_nstreams )
+  if( !auto_inc_nstreams )
   {
     extinct_matrix_allf.resize(f_grid.nelem(), num_scatlayers, 2, nummu,
                                stokes_dim, stokes_dim);
@@ -1831,6 +1831,44 @@ void run_rt4_spectral( Workspace& ws,
     }
   }
 
+  // FIXME: once, all old optprop scheme incl. the applied agendas is removed,
+  // we can remove this as well.
+  Vector scat_za_grid_orig;
+  if( auto_inc_nstreams )
+    // For the WSV scat_za_grid, we need to reset these grids instead of
+    // creating a new container. this because further down some agendas are
+    // used that access scat_za/aa_grid through the workspace.
+    // Later on, we need to reconstruct the original setting, hence backup
+    // that here.
+    scat_za_grid_orig = scat_za_grid;
+
+
+   Index nummu_new = 0;
+  // Loop over frequencies
+  for (Index f_index = 0; f_index < f_grid.nelem(); f_index ++) {
+    // Wavelength [um]
+    Numeric wavelength;
+    wavelength = 1e6 * SPEED_OF_LIGHT / f_grid[f_index];
+
+    Matrix groundreflec = ground_reflec(f_index, joker, joker);
+    Tensor4 surfreflmat = surf_refl_mat(f_index, joker, joker, joker, joker);
+    Matrix surfemisvec = surf_emis_vec(f_index, joker, joker);
+    //Vector muvalues=mu_values;
+
+    // only update gas_extinct if there is any gas absorption at all (since
+    // vmr_field is not freq-dependent, gas_extinct will remain as above
+    // initialized (with 0) for all freqs, ie we can rely on that it wasn't
+    // changed).
+    if (vmr_field.nbooks() > 0)
+      {
+        gas_optpropCalc(ws, gas_extinct,
+                      propmat_clearsky_agenda,
+                      t_field(Range(0, num_layers + 1), joker, joker),
+                      vmr_field(joker, Range(0, num_layers + 1), joker, joker),
+                      p_grid[Range(0, num_layers + 1)],
+                      f_grid[Range(f_index, 1)]);
+      }
+  }
   cout << "I am in run_rt4_spectral now! \n";
 }
 
@@ -2218,11 +2256,14 @@ void par_optpropCalcSpectral(Tensor5View emis_vector,
                       const Index& stokes_dim )
 {
     // Initialization
+    // FIXME: Null indices rein --> null indices raus!
     extinct_matrix=0.;
     emis_vector=0.;
 
     const Index Np_cloud = pnd_field.npages();
     const Index nummu = scat_za_grid.nelem()/2;
+    const Vector aa_grid_dummy(1,0.);
+    const bool any_m = (max(scat_data_spectral[0][0].coeff_inc(1,joker))!= 0);
 
     assert( emis_vector.nbooks() == Np_cloud-1 );
     assert( extinct_matrix.nshelves() == Np_cloud-1 );
@@ -2231,7 +2272,6 @@ void par_optpropCalcSpectral(Tensor5View emis_vector,
     Vector T_array =  t_field(Range(cloudbox_limits[0],Np_cloud), 0, 0);
     Matrix dir_array(scat_za_grid.nelem(), 2, 0.);
     dir_array(joker,0) = scat_za_grid;
-
     // making output containers
     ArrayOfArrayOfTensor5 ext_mat_Nse;
     ArrayOfArrayOfTensor4 abs_vec_Nse;
@@ -2242,7 +2282,6 @@ void par_optpropCalcSpectral(Tensor5View emis_vector,
     ArrayOfIndex ptype_ssbulk;
     Tensor5 ext_mat_bulk;
     Tensor4 abs_vec_bulk;
-
     Index ptype_bulk;
 
     opt_prop_NScatElemsSpectral( ext_mat_Nse, abs_vec_Nse, ptypes_Nse, t_ok,
@@ -2253,14 +2292,46 @@ void par_optpropCalcSpectral(Tensor5View emis_vector,
     opt_prop_Bulk( ext_mat_bulk, abs_vec_bulk, ptype_bulk,
                  ext_mat_ssbulk, abs_vec_ssbulk, ptype_ssbulk );
 
-    Tensor6 extinct_matrix_temp(abs_vec_bulk.nbooks(),Np_cloud,nummu,nummu,
+    Tensor6 extinct_matrix_temp(abs_vec_bulk.nbooks(),Np_cloud,dir_array.nrows(),1,
                                 ext_mat_bulk.nrows(),ext_mat_bulk.ncols());
-    Tensor5 emis_vec_temp(abs_vec_bulk.nbooks(),Np_cloud,nummu,nummu,
+    Tensor5 emis_vec_temp(abs_vec_bulk.nbooks(),Np_cloud,dir_array.nrows(),1,
                           abs_vec_bulk.ncols());
 
-    par_optpropSpecToGrid(extinct_matrix_temp,emis_vec_temp,ext_mat_bulk,abs_vec_bulk,dir_array(joker,0),
-    dir_array(joker,1));
+    opt_prop_SpecToGrid(extinct_matrix_temp,emis_vec_temp,ext_mat_bulk,abs_vec_bulk,dir_array(joker,0),
+    aa_grid_dummy,any_m);
 
+    // Calculate layer averaged extinction and absorption and sort into RT4-format
+    // data tensors
+    for (Index ipc = 0; ipc < Np_cloud-1; ipc++)
+    {
+/*
+    if ( (ext_mat_bulk(0,ipc,0,0,0)+
+          ext_mat_bulk(0,ipc+1,0,0,0)) > 0. )
+    {
+      scatlayers[Np_cloud-2-cloudbox_limits[0]-ipc] = float(ipc);
+*/
+      for(Index fi=0; fi<abs_vec_bulk.nbooks(); fi++)
+        for (Index imu=0; imu<nummu; imu++)
+          for (Index ist1=0; ist1<stokes_dim; ist1++)
+          {
+            for (Index ist2=0; ist2<stokes_dim; ist2++)
+            {
+              extinct_matrix(fi,ipc,0,imu,ist2,ist1) = .5 *
+                ( extinct_matrix_temp(fi,ipc,imu,0,ist1,ist2) +
+                  extinct_matrix_temp(fi,ipc+1,imu,0,ist1,ist2) );
+              extinct_matrix(fi,ipc,1,imu,ist2,ist1) = .5 *
+                ( extinct_matrix_temp(fi,ipc,nummu+imu,0,ist1,ist2) +
+                  extinct_matrix_temp(fi,ipc+1,nummu+imu,0,ist1,ist2) );
+            }
+            emis_vector(fi,ipc,0,imu,ist1) = .5 *
+              ( emis_vec_temp(fi,ipc,imu,0,ist1) +
+                emis_vec_temp(fi,ipc+1,imu,0,ist1) );
+            emis_vector(fi,ipc,1,imu,ist1) = .5 *
+              ( emis_vec_temp(fi,ipc,nummu+imu,0,ist1) +
+                emis_vec_temp(fi,ipc+1,nummu+imu,0,ist1) );
+          }
+//    }
+  }
 }
 
 

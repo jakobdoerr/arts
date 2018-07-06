@@ -338,6 +338,7 @@ void opt_prop_NScatElemsSpectral(//Output
         const Index& t_interp_order)
 {
   Index f_start, nf;
+  Index nl,nm;
   Index nCoeff;
   if( f_index<0 )
     {
@@ -365,38 +366,89 @@ void opt_prop_NScatElemsSpectral(//Output
   const Index Nse_all = TotalNumberOfElements(scat_data_spectral);
   t_ok.resize(Nse_all,nT);
   Index i_se_flat = 0;
-  // The spectral coefficients of the scat elements can have different lenghts,
-  // depending on their accuracy. For averaging we want to find the
-  // maximum lenght of all the elements and put it on ext_mat[0][0]
-  // and abs_vec[0][0]
-  Index max_coeff = 0;
-
+  // The spectral coefficients of the scat elements can have different accuracies
+    // in l and m. In order to be able to average them correctly, we need to
+    // map all fields to the highest coefficients available in the data.
+  Index max_l = 0;
+  Index max_m = 0;
+  Index max_nlm;
+  Index max_l_local;
+  Index max_m_local;
+  Tensor5 ext_mat_temp;
+  Tensor4 abs_vec_temp;
+  // First find the maximum l and m in the data (sort of a dry run of the loop
+  // below...)
+  for( Index i_ss=0; i_ss<nss; i_ss++ )
+  {
+    Index nse = scat_data_spectral[i_ss].nelem();
+    for (Index i_se = 0; i_se < nse; i_se++)
+    {
+      nl = max(scat_data_spectral[i_ss][i_se].coeff_inc(0,joker));
+      nm = max(scat_data_spectral[i_ss][i_se].coeff_inc(1,joker));
+      if (nl > max_l) // find maximum number of coefficients
+      {
+          max_l = nl;
+      }
+      if (nm > max_m) // find maximum number of coefficients
+      {
+          max_m = nm;
+      }
+    }
+      // TODO: Check (either here or elsewhere) that mmax is either
+      // lmax or 0!
+  }
+  if (max_m > 0)
+  {
+    max_nlm = (Index) max_l * (max_l + 1) / 2;
+  }
+  else
+  {
+    max_nlm = max_l;
+  }
   for( Index i_ss=0; i_ss<nss; i_ss++ )
   {
     Index nse = scat_data_spectral[i_ss].nelem();
     ext_mat[i_ss].resize(nse);
     abs_vec[i_ss].resize(nse);
     ptypes[i_ss].resize(nse);
-
+    // Do the temperature averaging for every element. Here we also need
+    // to find out the maximum l and m in order to do
+    // the coefficients mapping to be able to average all elements
+    // together
     for( Index i_se=0; i_se<nse; i_se++ )
       {
         nCoeff = scat_data_spectral[i_ss][i_se].coeff_inc.ncols();
-        ext_mat[i_ss][i_se].resize(nf, nT, nCoeff, stokes_dim, stokes_dim);
-        abs_vec[i_ss][i_se].resize(nf, nT, nCoeff, stokes_dim);
+        max_l_local = max(scat_data_spectral[i_ss][i_se].coeff_inc(0,joker));
+        max_m_local = max(scat_data_spectral[i_ss][i_se].coeff_inc(1,joker));
 
-        cout << nf << " " << nT << " " << nCoeff << " " << stokes_dim << "\n";
+        ext_mat_temp.resize(nf, nT, nCoeff, stokes_dim, stokes_dim);
+        abs_vec_temp.resize(nf, nT, nCoeff, stokes_dim);
 
-        opt_prop_1ScatElemSpectral(ext_mat[i_ss][i_se], abs_vec[i_ss][i_se],
+        opt_prop_1ScatElemSpectral(ext_mat_temp, abs_vec_temp,
                            ptypes[i_ss][i_se], t_ok(i_se_flat,joker),
                            scat_data_spectral[i_ss][i_se],
                            T_array, f_start, t_interp_order);
-        i_se_flat++;
-        if (nCoeff > max_coeff) // find maximum number of coefficients
+        // Do the mapping to the highest l and m
+        ext_mat[i_ss][i_se].resize(nf,nT,max_nlm,stokes_dim,stokes_dim);
+        abs_vec[i_ss][i_se].resize(nf,nT,max_nlm,stokes_dim);
+        ext_mat[i_ss][i_se] = 0.;
+        abs_vec[i_ss][i_se] = 0.;
+        for (Index l = 0; l<max_l_local; l++)
         {
-            max_coeff = nCoeff;
+          for (Index m = 0; m<max_m_local; m++)
+          {
+            Index local_idx = (Index) max_l_local*m - (m-1)*m/2 + l;
+            Index global_idx = (Index) max_l*m - (m-1)*m/2 + l;
+            ext_mat[i_ss][i_se](joker,joker,global_idx,joker,joker)
+                    = ext_mat_temp(joker,joker,local_idx,joker,joker);
+            abs_vec[i_ss][i_se](joker,joker,global_idx,joker)
+                    = abs_vec_temp(joker,joker,local_idx,joker);
         }
       }
+      i_se_flat++;
     }
+  }
+/*
     Tensor5 ext_mat_tmp = ext_mat[0][0];
     Tensor4 abs_vec_tmp = abs_vec[0][0];
     ext_mat[0][0].resize(nf, nT, max_coeff, stokes_dim, stokes_dim);
@@ -408,8 +460,8 @@ void opt_prop_NScatElemsSpectral(//Output
         abs_vec[0][0](joker, joker, ndir, joker )
                 = abs_vec_tmp(joker, joker, ndir, joker);
     }
-    assert( i_se_flat == Nse_all );
-    cout << scat_data_spectral[0][0].ext_mat_data_real(0,0,joker,0) << "\n";
+    */
+  assert( i_se_flat == Nse_all );
 
 }
 
@@ -708,7 +760,6 @@ void opt_prop_1ScatElemSpectral(//Output
   assert( ext_mat.ncols() == stokes_dim );
 
   ptype = ssd.ptype;
-
   // Determine T-interpol order as well as interpol positions and weights (they
   // are the same for all directions (and freqs), ie it is sufficient to
   // calculate them once).
@@ -716,7 +767,6 @@ void opt_prop_1ScatElemSpectral(//Output
   Index this_T_interp_order = -1;
   ArrayOfGridPosPoly T_gp(nTout);
   Matrix T_itw;
-
   if( nTin>1 )
   {
     this_T_interp_order = min(t_interp_order, nTin-1);
@@ -787,8 +837,6 @@ void opt_prop_1ScatElemSpectral(//Output
 
   const Index next = ssd.ext_mat_data_real.ncols();
   const Index nabs = ssd.abs_vec_data_real.ncols();
-  cout << "Hello ," << next << "\n";
-  cout << "Hello ," << nabs << "\n";
 
   if( this_T_interp_order<0 ) // just extract (and unpack) ext and abs data
                                 // for the fs, the Tin, and the dirin and sort
@@ -847,33 +895,6 @@ void opt_prop_1ScatElemSpectral(//Output
           }
       }
     }
-/*
-  if( this_T_interp_order<0 ) // T only needs to be extracted.
-  {
-    for( Index Tind=0; Tind<nTout; Tind++ )
-    {
-      ext_mat(joker,Tind,joker,joker) = ssd.ext_mat_data_real(joker,0,joker,joker);
-      abs_vec(joker,Tind,joker,joker) = ssd.abs_vec_data_real(joker,0,joker,joker);
-    }
-  }
-  else // T-interpolation required. To be done on the compact ssd
-       // format.
-  {
-    for( Index find=0; find<nf; find++ )
-    {
-      for( Index Dind=0; Dind<nCoeff; Dind++ )
-      {
-          for (Index nst = 0; nst < next; nst++)
-          {
-              interp(ext_mat(find, joker, Dind, nst), T_itw,
-                     ssd.ext_mat_data_real(find, joker, Dind, nst), T_gp);
-              interp(abs_vec(find, joker, Dind, nst), T_itw,
-                     ssd.abs_vec_data_real(find, joker, Dind, nst), T_gp);
-          }
-      }
-    }
-  }
-    */
 }
 
 

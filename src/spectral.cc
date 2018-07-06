@@ -82,14 +82,15 @@ void methodname(//Output
   \date   2018-05-25
 */
 
-void par_optpropSpecToGrid(//Output
+void opt_prop_SpecToGrid(//Output
                 Tensor6View ext_matrix,
                 Tensor5View abs_vector,
                 //Input
                 const Tensor5& ext_matrix_spectral,
                 const Tensor4& abs_vector_spectral,
                 const Vector& za_grid,
-                const Vector& aa_grid)
+                const Vector& aa_grid,
+                const bool& any_m)
 {
     // Initialize gridded fields
     ext_matrix = 0.;
@@ -97,7 +98,6 @@ void par_optpropSpecToGrid(//Output
     shtns_cfg shtns;                // handle to a sht transform configuration
     long int lmax,mmax,nlat,nphi,mres, NLM;
     complex<double>  *Qlm;      // spherical harmonics coefficients (l,m space): complex numbers.
-    double *Sh, *Th;                // real space : theta,phi
     long int i,im,lm;
     double t;
     lmax = ext_matrix_spectral.npages();       nlat = 32;
@@ -111,8 +111,6 @@ void par_optpropSpecToGrid(//Output
     NLM = shtns->nlm;
     // Memory allocation : the use of fftw_malloc is required because we need proper 16-byte alignement.
     // allocate spatial fields.
-    Sh = (double *) fftw_malloc( NSPAT_ALLOC(shtns) * sizeof(double));
-
     // allocate SH representations.
     Qlm = (complex<double> *) fftw_malloc( NLM * sizeof(complex<double>));
 
@@ -124,17 +122,19 @@ void par_optpropSpecToGrid(//Output
             {
                 for (Index nst2 = 0; nst2 < ext_matrix_spectral.ncols(); nst2++)
                 {
+                    for (Index i_lm = 0; i_lm < lmax; i_lm ++)
+                    {
+                        Qlm[i_lm] = (complex<double>) ext_matrix_spectral(
+                                f_index,p_index,i_lm,nst1,nst2);
+
+                    }
                     for (Index theta = 0; theta < za_grid.nelem(); theta++)
                     {
-                        for (Index i_lm = 0; i_lm < lmax; i_lm ++)
+                        for (Index phi = 0; phi < aa_grid.nelem(); phi++)
                         {
-                            Qlm[i_lm] = (complex<double>) ext_matrix_spectral(
-                                    f_index,p_index,i_lm,nst1,nst2);
-
+                            ext_matrix(f_index, p_index, theta, phi, nst1, nst2) =
+                                    SH_to_point(shtns, Qlm, cos(za_grid[theta]), aa_grid[phi]);
                         }
-                        ext_matrix(f_index,p_index,joker,0,nst1,nst2) =
-                                SH_to_point(shtns, Qlm, cos(za_grid[theta]), 0);
-
                     }
                 }
             }
@@ -146,9 +146,6 @@ void par_optpropSpecToGrid(//Output
             }
         }
     }
-    cout << za_grid << "\n";
-    cout << ext_matrix(0,0,joker,0,0,0) << "\n";
-    cout << ext_matrix_spectral(0,0,joker,0,0) << "\n";
 }
 
 

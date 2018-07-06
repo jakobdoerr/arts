@@ -2233,10 +2233,6 @@ void scat_data_spectralCalc(ArrayOfArrayOfSpectralSingleScatteringData& scat_dat
             }
         }
     }
-    cout << scat_data_spectral_raw[0][0].f_grid << "\n";
-    cout << scat_data_spectral_raw[0][0].ext_mat_data_real(joker,0,0,0) << "\n";
-    cout << scat_data_spectral[0][0].f_grid << "\n";
-    cout << scat_data_spectral[0][0].ext_mat_data_real(joker,0,0,0) << "\n";
 }
 
 
