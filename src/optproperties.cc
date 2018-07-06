@@ -330,6 +330,7 @@ void opt_prop_NScatElemsSpectral(//Output
         ArrayOfArrayOfTensor4& abs_vec, // [nss][nse](nf,nT,ncoeff,nst)
         ArrayOfArrayOfIndex& ptypes,
         Matrix& t_ok,
+        bool& any_m,
         //Input
         const ArrayOfArrayOfSpectralSingleScatteringData& scat_data_spectral,
         const Index& stokes_dim,
@@ -397,7 +398,8 @@ void opt_prop_NScatElemsSpectral(//Output
       // TODO: Check (either here or elsewhere) that mmax is either
       // lmax or 0!
   }
-  if (max_m > 0)
+  any_m = (max_m > 0);
+  if (any_m)
   {
     max_nlm = (Index) max_l * (max_l + 1) / 2;
   }

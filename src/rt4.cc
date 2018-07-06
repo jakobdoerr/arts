@@ -2263,7 +2263,7 @@ void par_optpropCalcSpectral(Tensor5View emis_vector,
     const Index Np_cloud = pnd_field.npages();
     const Index nummu = scat_za_grid.nelem()/2;
     const Vector aa_grid_dummy(1,0.);
-    const bool any_m = (max(scat_data_spectral[0][0].coeff_inc(1,joker))!= 0);
+    bool any_m;
 
     assert( emis_vector.nbooks() == Np_cloud-1 );
     assert( extinct_matrix.nshelves() == Np_cloud-1 );
@@ -2284,7 +2284,7 @@ void par_optpropCalcSpectral(Tensor5View emis_vector,
     Tensor4 abs_vec_bulk;
     Index ptype_bulk;
 
-    opt_prop_NScatElemsSpectral( ext_mat_Nse, abs_vec_Nse, ptypes_Nse, t_ok,
+    opt_prop_NScatElemsSpectral( ext_mat_Nse, abs_vec_Nse, ptypes_Nse, t_ok, any_m,
                        scat_data_spectral, stokes_dim, T_array, f_index );
     opt_prop_ScatSpecBulk( ext_mat_ssbulk, abs_vec_ssbulk, ptype_ssbulk,
                          ext_mat_Nse, abs_vec_Nse, ptypes_Nse,
@@ -2299,7 +2299,6 @@ void par_optpropCalcSpectral(Tensor5View emis_vector,
 
     opt_prop_SpecToGrid(extinct_matrix_temp,emis_vec_temp,ext_mat_bulk,abs_vec_bulk,dir_array(joker,0),
     aa_grid_dummy,any_m);
-
     // Calculate layer averaged extinction and absorption and sort into RT4-format
     // data tensors
     for (Index ipc = 0; ipc < Np_cloud-1; ipc++)

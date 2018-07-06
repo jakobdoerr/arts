@@ -212,6 +212,7 @@ void opt_prop_NScatElemsSpectral(//Output
                          ArrayOfArrayOfTensor4& abs_vec,
                          ArrayOfArrayOfIndex& ptypes,
                          Matrix& t_ok,
+                         bool& any_m,
                          //Input
                          const ArrayOfArrayOfSpectralSingleScatteringData& scat_data_spectral,
                          const Index& stokes_dim,

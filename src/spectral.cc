@@ -101,8 +101,12 @@ void opt_prop_SpecToGrid(//Output
     long int i,im,lm;
     double t;
     lmax = ext_matrix_spectral.npages();       nlat = 32;
-    mmax = 0;       nphi = 10;
+    nphi = 10;
     mres = 1;
+    if (any_m)
+        mmax = lmax;
+    else
+        mmax = 0;
     shtns_verbose(0);                       // displays informations during initialization.
     shtns_use_threads(0);           // enable multi-threaded transforms (if supported).
     shtns = shtns_init( sht_gauss, lmax, mmax, mres, nlat, nphi );
