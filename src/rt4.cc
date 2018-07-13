@@ -1868,6 +1868,46 @@ void run_rt4_spectral( Workspace& ws,
                       p_grid[Range(0, num_layers + 1)],
                       f_grid[Range(f_index, 1)]);
       }
+
+      Index pfct_failed = 0;
+      if( pndtot )
+      {
+        if( nummu_new<nummu )
+        {
+          if( !auto_inc_nstreams ) // all freq calculated before. just copy
+                                   // here. but only if needed.
+          {
+            if( emis_vector_allf.nshelves()!=1 )
+            {
+              emis_vector = emis_vector_allf(Range(f_index,1),
+                                             joker,joker,joker,joker);
+              extinct_matrix = extinct_matrix_allf(Range(f_index,1),
+                                                   joker,joker,joker,joker,joker);
+            }
+          }
+          else
+          {
+            par_optpropCalcSpectral( emis_vector, extinct_matrix,
+                             //scatlayers,
+                             scat_data_spectral, scat_za_grid, f_index,
+                             pnd_field,
+                             t_field(Range(0,num_layers+1),joker,joker),
+                             cloudbox_limits, stokes_dim );
+          }
+          sca_optpropCalcSpectral( scatter_matrix, pfct_failed,
+                           emis_vector(0,joker,joker,joker,joker),
+                           extinct_matrix(0,joker,joker,joker,joker,joker),
+                           f_index, scat_data_spectral, pnd_field, stokes_dim,
+                           scat_za_grid, quad_weights,
+                           pfct_method, pfct_aa_grid_size, pfct_threshold,
+                           auto_inc_nstreams,t_field(Range(0,num_layers+1),joker,joker),
+                           cloudbox_limits,verbosity );
+        }
+        else
+        {
+          pfct_failed = 1;
+        }
+      }
   }
   cout << "I am in run_rt4_spectral now! \n";
 }
@@ -2732,6 +2772,105 @@ void sca_optpropCalc( //Output
     }
 }
 
+//! sca_optpropCalcSpectral
+/*!
+  Calculates layer (and azimuthal) averaged phase matrix (scatter_matrix). This
+  variable is required as input for the RT4 subroutine.
+
+  \param scatter_matrix        Layer averaged scattering matrix (azimuth mode 0) for all particle layers
+  \param pfct_failed           Flag whether norm of scatter_matrix is sufficiently accurate
+  \param emis_vector           Layer averaged particle absorption for all particle layers
+  \param extinct_matrix        Layer averaged particle extinction for all particle layers
+  \param f_index               as the WSV
+  \param scat_data_spectral    as the (new-type, f_grid prepared) WSV
+  \param pnd_field             as the WSV
+  \param stokes_dim            as the WSV
+  \param scat_za_grid          as the WSV
+  \param quad_weights          Quadrature weights associated with scat_za_grid
+  \param pfct_method           Method for scattering matrix temperature dependance handling
+  \param pfct_aa_grid_size     Number of azimuthal grid points in Fourier series decomposition of randomly oriented particles
+  \param pfct_threshold        Requested scatter_matrix norm accuracy (in terms of single scat albedo)
+  \param auto_inc_nstreams     as the WSV
+
+  \author Jakob Doerr
+  \date   2018-07-08
+*/
+void sca_optpropCalcSpectral( //Output
+        Tensor6View scatter_matrix,
+        Index& pfct_failed,
+        //Input
+        ConstTensor4View emis_vector,
+        ConstTensor5View extinct_matrix,
+        const Index& f_index,
+        const ArrayOfArrayOfSpectralSingleScatteringData& scat_data_spectral,
+        ConstTensor4View pnd_field,
+        const Index& stokes_dim,
+        const Vector& scat_za_grid,
+        ConstVectorView quad_weights,
+        const String& pfct_method,
+        const Index& pfct_aa_grid_size,
+        const Numeric& pfct_threshold,
+        const Index& auto_inc_nstreams,
+        ConstTensor3View t_field,
+        const ArrayOfIndex& cloudbox_limits,
+        const Verbosity& verbosity )
+{
+  // FIXME: this whole funtions needs revision/optimization regarding
+  // - temperature dependence (using new-type scat_data)
+  // - using redundancies in sca_mat data at least for totally random
+  //   orientation particles (are there some for az. random, too? like
+  //   upper/lower hemisphere equiv?) - we might at least have a flag
+  //   (transported down from calling function?) whether we deal exclusively
+  //   with totally random orient particles (and then take some shortcuts...)
+
+  // FIXME: do we have numerical issues, too, here in case of tiny pnd? check
+  // with Patrick's Disort-issue case.
+
+  // Initialization
+  scatter_matrix=0.;
+
+  const Index N_se = pnd_field.nbooks();
+  const Index Np_cloud = pnd_field.npages();
+  const Index nza_rt = scat_za_grid.nelem();
+
+  assert( scatter_matrix.nvitrines() == Np_cloud-1 );
+
+  // Check that total number of scattering elements in scat_data and pnd_field
+  // agree.
+  // FIXME: this should be done earlier. in calling method. outside freq- and
+  // other possible loops. rather assert than runtime error.
+  if( TotalNumberOfElements(scat_data_spectral) != N_se )
+  {
+      ostringstream os;
+      os << "Total number of scattering elements in scat_data ("
+         << TotalNumberOfElements(scat_data_spectral)
+         << ") and pnd_field (" << N_se << ") disagree.";
+      throw runtime_error( os.str() );
+  }
+      // preparing input data
+  Vector T_array =  t_field(Range(cloudbox_limits[0],Np_cloud), 0, 0);
+  Matrix dir_array(scat_za_grid.nelem(), 2, 0.);
+  dir_array(joker,0) = scat_za_grid;
+  // making output containers
+  ArrayOfArrayOfTensor6 pha_mat_Nse;
+  ArrayOfArrayOfIndex ptypes_Nse;
+  Matrix t_ok;
+  ArrayOfTensor6 pha_mat_ssbulk;
+  ArrayOfIndex ptype_ssbulk;
+  Tensor6 pha_mat_bulk;
+  Index ptype_bulk;
+
+  pha_mat_NScatElemsSpectral(pha_mat_Nse,ptypes_Nse,t_ok,scat_data_spectral,stokes_dim,
+  T_array,f_index);
+
+
+
+
+
+
+  // TODO WORK BITCH.
+  cout << "I am lazy!!! \n";
+}
 
 //! surf_optpropCalc
 /*!

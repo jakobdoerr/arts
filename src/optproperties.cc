@@ -386,27 +386,31 @@ void opt_prop_NScatElemsSpectral(//Output
     {
       nl = max(scat_data_spectral[i_ss][i_se].coeff_inc(0,joker));
       nm = max(scat_data_spectral[i_ss][i_se].coeff_inc(1,joker));
-      if (nl > max_l) // find maximum number of coefficients
+      if (nl > max_l) // find maximum number of l coefficients
       {
           max_l = nl;
       }
-      if (nm > max_m) // find maximum number of coefficients
+      if (nm > max_m) // find maximum number of m coefficients
       {
           max_m = nm;
       }
     }
-      // TODO: Check (either here or elsewhere) that mmax is either
-      // lmax or 0!
   }
   any_m = (max_m > 0);
+  // Check (either here or elsewhere) that mmax is either
+  // lmax or 0!
+  assert(!max_m || max_l == max_m);
+  // Set the number of coefficients (and indices)
   if (any_m)
   {
-    max_nlm = (Index) max_l * (max_l + 1) / 2;
+    // See DOC
+    max_nlm = (Index) (max_l + 1) * (max_l + 2) / 2;
   }
   else
   {
-    max_nlm = max_l;
+    max_nlm = max_l + 1;
   }
+
   for( Index i_ss=0; i_ss<nss; i_ss++ )
   {
     Index nse = scat_data_spectral[i_ss].nelem();
@@ -430,14 +434,15 @@ void opt_prop_NScatElemsSpectral(//Output
                            ptypes[i_ss][i_se], t_ok(i_se_flat,joker),
                            scat_data_spectral[i_ss][i_se],
                            T_array, f_start, t_interp_order);
-        // Do the mapping to the highest l and m
+
+        // Do the mapping to the highest l and m (see DOC for details)
         ext_mat[i_ss][i_se].resize(nf,nT,max_nlm,stokes_dim,stokes_dim);
         abs_vec[i_ss][i_se].resize(nf,nT,max_nlm,stokes_dim);
         ext_mat[i_ss][i_se] = 0.;
         abs_vec[i_ss][i_se] = 0.;
-        for (Index l = 0; l<max_l_local; l++)
+        for (Index l = 0; l<max_l_local + 1; l++)
         {
-          for (Index m = 0; m<max_m_local; m++)
+          for (Index m = 0; m<max_m_local + 1; m++)
           {
             Index local_idx = (Index) max_l_local*m - (m-1)*m/2 + l;
             Index global_idx = (Index) max_l*m - (m-1)*m/2 + l;
@@ -1202,6 +1207,144 @@ void pha_mat_NScatElems(//Output
                           ptypes[i_ss][i_se], t_ok(i_se_flat,joker),
                           scat_data[i_ss][i_se],
                           T_array, pdir_array, idir_array, f_start, t_interp_order);
+        i_se_flat++;
+      }
+  }
+  assert( i_se_flat == Nse_all );
+}
+
+
+//! Phase matrices from all scattering elements.
+/*!
+  Derives temperature and direction interpolated phase matrices for all
+  scattering elements present in scat_data.
+
+  ATTENTION:
+  If scat_data has only one freq point, f_index=-1 (i.e. all) extracts only this
+  one freq point. To duplicate that as needed if f_grid has more freqs is TASK
+  of the CALLING METHOD!
+
+  Loops over pha_mat_1ScatElem and packs its output into all-scat-elements
+  containers.
+
+  \param[out] pha_mat    Phase matrix (over scat elements, freq, temp,
+                           propagation direction, incident direction).
+  \param[out] ptypes     Scattering element types.
+  \param[out] t_ok       Flag whether T-interpol valid (over scat elements, temp).
+  \param[in]  scat_data  as the WSV.
+  \param[in]  stokes_dim as the WSV.
+  \param[in]  T_array    Temperatures to extract pha for.
+  \param[in]  pdir_array Propagation directions to extract pha for (as pairs of
+                           zenith and azimuth angle per direction).
+  \param[in]  idir_array Incident directions to extract pha for (as pairs of
+                           zenith and azimuth angle per direction).
+  \param[in]  f_index    Index of frequency to extract. -1 extracts data for all
+                           freqs available in ssd.
+  \param[in]  t_interp_order  Temperature interpolation order.
+
+  \author Jana Mendrok
+  \date   2018-03-24
+*/
+void pha_mat_NScatElemsSpectral(//Output
+                        ArrayOfArrayOfTensor6& pha_mat, // [nss][nse](nf,nT,npdir,nidir,nst,nst)
+                        ArrayOfArrayOfIndex& ptypes,
+                        Matrix& t_ok,
+                        //Input
+                        const ArrayOfArrayOfSpectralSingleScatteringData& scat_data_spectral,
+                        const Index& stokes_dim,
+                        const Vector& T_array,
+                        const Index& f_index,
+                        const Index& t_interp_order)
+{
+  Index f_start, nf;
+  Index nl_inc,nm_inc,nl_sca,nm_sca;
+  Index nCoeff_inc,nCoeff_sca;
+  if( f_index<0 )
+    {
+      nf = scat_data_spectral[0][0].pha_mat_data_real.nshelves();
+      f_start = 0;
+      //f_end = f_start+nf;
+    }
+  else
+    {
+      nf = 1;
+      if( scat_data_spectral[0][0].pha_mat_data_real.nshelves()==1 )
+        f_start = 0;
+      else
+        f_start = f_index;
+      //f_end = f_start+nf;
+    }
+
+  const Index nT = T_array.nelem();
+
+  const Index nss = scat_data_spectral.nelem();
+  pha_mat.resize(nss);
+  ptypes.resize(nss);
+
+  const Index Nse_all = TotalNumberOfElements(scat_data_spectral);
+  t_ok.resize(Nse_all,nT);
+  Index i_se_flat = 0;
+  // The spectral coefficients of the scat elements can have different accuracies
+  // in l and m. In order to be able to average them correctly, we need to
+  // map all fields to the highest coefficients available in the data.
+  // Since the phase matrix is double transformed
+  Index max_l_inc = 0;
+  Index max_m_inc = 0;
+  Index max_nlm_inc;
+  Index max_l_inc_local;
+  Index max_l_sca = 0;
+  Index max_m_sca = 0;
+  Index max_nlm_sca;
+  Index max_l_sca_local;
+  Index max_m_sca_local;
+  Tensor6 pha_mat_temp;
+  // First find the maximum l and m in the data (sort of a dry run of the loop
+  // below...)
+  for( Index i_ss=0; i_ss<nss; i_ss++ )
+  {
+      Index nse = scat_data_spectral[i_ss].nelem();
+      for (Index i_se = 0; i_se < nse; i_se++)
+      {
+          nl_inc = max(scat_data_spectral[i_ss][i_se].coeff_inc(0,joker));
+          nm_inc = max(scat_data_spectral[i_ss][i_se].coeff_inc(1,joker));
+          nl_sca = max(scat_data_spectral[i_ss][i_se].coeff_sca(0,joker));
+          nm_sca = max(scat_data_spectral[i_ss][i_se].coeff_sca(1,joker));
+          // Find maximum coefficients in incident direction
+          if (nl_inc > max_l_inc) // find maximum number of l coefficients
+          {
+              max_l_inc = nl_inc;
+          }
+          if (nm_inc > max_m_inc) // find maximum number of m coefficients
+          {
+              max_m_inc = nm_inc;
+          }
+          // Find maximum coefficients in scattered direction
+          if (nl_sca > max_l_sca) // find maximum number of l coefficients
+          {
+              max_l_sca = nl_sca;
+          }
+          if (nm_sca > max_m_sca) // find maximum number of m coefficients
+          {
+              max_m_sca = nm_sca;
+          }
+      }
+  }
+  for( Index i_ss=0; i_ss<nss; i_ss++ )
+  {
+    Index nse = scat_data_spectral[i_ss].nelem();
+    pha_mat[i_ss].resize(nse);
+    ptypes[i_ss].resize(nse);
+
+    for( Index i_se=0; i_se<nse; i_se++ )
+      {
+        nCoeff_inc = scat_data_spectral[i_ss][i_se].coeff_inc.ncols();
+        nCoeff_sca = scat_data_spectral[i_ss][i_se].coeff_sca.ncols();
+        pha_mat_temp.resize(nf, nT, nCoeff_sca, nCoeff_inc, stokes_dim, stokes_dim);
+
+        //pha_mat_1ScatElem(pha_mat[i_ss][i_se],
+         //                 ptypes[i_ss][i_se], t_ok(i_se_flat,joker),
+        //                  scat_data[i_ss][i_se],
+         //                   T_array, pdir_array, idir_array, f_start, t_interp_order);
         i_se_flat++;
       }
   }

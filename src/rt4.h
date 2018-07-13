@@ -249,6 +249,26 @@ void sca_optpropCalc( //Output
                       const Index& auto_inc_nstreams,
                       const Verbosity& verbosity );
 
+void sca_optpropCalcSpectral( //Output
+                      Tensor6View scatter_matrix,
+                      Index& pfct_failed,
+                      //Input
+                      ConstTensor4View emis_vector,
+                      ConstTensor5View extinct_matrix,
+                      const Index& f_index,
+                      const ArrayOfArrayOfSpectralSingleScatteringData& scat_data_spectral,
+                      ConstTensor4View pnd_field,
+                      const Index& stokes_dim,
+                      const Vector& scat_za_grid,
+                      ConstVectorView quad_weights,
+                      const String& pfct_method,
+                      const Index& pfct_aa_grid_size,
+                      const Numeric& pfct_threshold,
+                      const Index& auto_inc_nstreams,
+                      ConstTensor3View t_field,
+                      const ArrayOfIndex& cloudbox_limits,
+                      const Verbosity& verbosity );
+
 void surf_optpropCalc( Workspace& ws,
                        //Output
                        Tensor5View surf_refl_mat,
