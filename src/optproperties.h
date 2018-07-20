@@ -287,9 +287,12 @@ void pha_mat_NScatElems(//Output
                         const Index& t_interp_order=1);
 
 void pha_mat_NScatElemsSpectral(//Output
-                        ArrayOfArrayOfTensor6& pha_mat,
+                        ArrayOfArrayOfTensor6& pha_mat_real,
+                        ArrayOfArrayOfTensor6& pha_mat_imag,
                         ArrayOfArrayOfIndex& ptypes,
                         Matrix& t_ok,
+                        bool& any_m_inc,
+                        bool& any_m_sca,
                         //Input
                         const ArrayOfArrayOfSpectralSingleScatteringData& scat_data_spectral,
                         const Index& stokes_dim,
@@ -308,6 +311,17 @@ void pha_mat_1ScatElem(//Output
                        const Matrix& idir_array,
                        const Index& f_start,
                        const Index& t_interp_order=1);
+
+void pha_mat_1ScatElemSpectral(//Output
+                        Tensor6View pha_mat_real,
+                        Tensor6View pha_mat_imag,
+                        Index& ptype,
+                        VectorView t_ok,
+                        //Input
+                        const SpectralSingleScatteringData& ssd,
+                        const Vector& T_array,
+                        const Index& f_index,
+                        const Index& t_interp_order=1);
 
 void FouComp_1ScatElem(//Output
                        Tensor7View pha_mat_fou,

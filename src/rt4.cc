@@ -2852,23 +2852,33 @@ void sca_optpropCalcSpectral( //Output
   Matrix dir_array(scat_za_grid.nelem(), 2, 0.);
   dir_array(joker,0) = scat_za_grid;
   // making output containers
-  ArrayOfArrayOfTensor6 pha_mat_Nse;
+  ArrayOfArrayOfTensor6 pha_mat_real_Nse;
+  ArrayOfArrayOfTensor6 pha_mat_imag_Nse;
   ArrayOfArrayOfIndex ptypes_Nse;
   Matrix t_ok;
-  ArrayOfTensor6 pha_mat_ssbulk;
+  ArrayOfTensor6 pha_mat_real_ssbulk;
+  ArrayOfTensor6 pha_mat_imag_ssbulk;
   ArrayOfIndex ptype_ssbulk;
-  Tensor6 pha_mat_bulk;
+  Tensor6 pha_mat_real_bulk;
+  Tensor6 pha_mat_imag_bulk;
   Index ptype_bulk;
+  bool any_m_inc;
+  bool any_m_sca;
+  pha_mat_NScatElemsSpectral(pha_mat_real_Nse,pha_mat_imag_Nse,ptypes_Nse,t_ok,
+                             any_m_inc,any_m_sca,
+                             scat_data_spectral,stokes_dim, T_array,f_index);
+  pha_mat_ScatSpecBulk(pha_mat_real_ssbulk,ptype_ssbulk,pha_mat_real_Nse,ptypes_Nse,
+                       pnd_field(joker, joker, 0, 0), t_ok);
+  pha_mat_ScatSpecBulk(pha_mat_imag_ssbulk,ptype_ssbulk,pha_mat_imag_Nse,ptypes_Nse,
+                         pnd_field(joker, joker, 0, 0), t_ok);
+  pha_mat_Bulk(pha_mat_real_bulk,ptype_bulk,pha_mat_real_ssbulk,ptype_ssbulk);
+  pha_mat_Bulk(pha_mat_imag_bulk,ptype_bulk,pha_mat_imag_ssbulk,ptype_ssbulk);
 
-  pha_mat_NScatElemsSpectral(pha_mat_Nse,ptypes_Nse,t_ok,scat_data_spectral,stokes_dim,
-  T_array,f_index);
 
 
 
 
-
-
-  // TODO WORK BITCH.
+    // TODO WORK BITCH.
   cout << "I am lazy!!! \n";
 }
 

@@ -384,8 +384,8 @@ void opt_prop_NScatElemsSpectral(//Output
     Index nse = scat_data_spectral[i_ss].nelem();
     for (Index i_se = 0; i_se < nse; i_se++)
     {
-      nl = max(scat_data_spectral[i_ss][i_se].coeff_inc(0,joker));
-      nm = max(scat_data_spectral[i_ss][i_se].coeff_inc(1,joker));
+      nl = (Index) max(scat_data_spectral[i_ss][i_se].coeff_inc(0,joker));
+      nm = (Index) max(scat_data_spectral[i_ss][i_se].coeff_inc(1,joker));
       if (nl > max_l) // find maximum number of l coefficients
       {
           max_l = nl;
@@ -422,34 +422,34 @@ void opt_prop_NScatElemsSpectral(//Output
     // the coefficients mapping to be able to average all elements
     // together
     for( Index i_se=0; i_se<nse; i_se++ )
-      {
-        nCoeff = scat_data_spectral[i_ss][i_se].coeff_inc.ncols();
-        max_l_local = max(scat_data_spectral[i_ss][i_se].coeff_inc(0,joker));
-        max_m_local = max(scat_data_spectral[i_ss][i_se].coeff_inc(1,joker));
+    {
+      nCoeff = scat_data_spectral[i_ss][i_se].coeff_inc.ncols();
+      max_l_local = (Index) max(scat_data_spectral[i_ss][i_se].coeff_inc(0,joker));
+      max_m_local = (Index) max(scat_data_spectral[i_ss][i_se].coeff_inc(1,joker));
 
-        ext_mat_temp.resize(nf, nT, nCoeff, stokes_dim, stokes_dim);
-        abs_vec_temp.resize(nf, nT, nCoeff, stokes_dim);
+      ext_mat_temp.resize(nf, nT, nCoeff, stokes_dim, stokes_dim);
+      abs_vec_temp.resize(nf, nT, nCoeff, stokes_dim);
 
-        opt_prop_1ScatElemSpectral(ext_mat_temp, abs_vec_temp,
+      opt_prop_1ScatElemSpectral(ext_mat_temp, abs_vec_temp,
                            ptypes[i_ss][i_se], t_ok(i_se_flat,joker),
                            scat_data_spectral[i_ss][i_se],
                            T_array, f_start, t_interp_order);
 
-        // Do the mapping to the highest l and m (see DOC for details)
-        ext_mat[i_ss][i_se].resize(nf,nT,max_nlm,stokes_dim,stokes_dim);
-        abs_vec[i_ss][i_se].resize(nf,nT,max_nlm,stokes_dim);
-        ext_mat[i_ss][i_se] = 0.;
-        abs_vec[i_ss][i_se] = 0.;
-        for (Index l = 0; l<max_l_local + 1; l++)
+      // Do the mapping to the highest l and m (see DOC for details)
+      ext_mat[i_ss][i_se].resize(nf,nT,max_nlm,stokes_dim,stokes_dim);
+      abs_vec[i_ss][i_se].resize(nf,nT,max_nlm,stokes_dim);
+      ext_mat[i_ss][i_se] = 0.;
+      abs_vec[i_ss][i_se] = 0.;
+      for (Index l = 0; l<max_l_local + 1; l++)
+      {
+        for (Index m = 0; m<max_m_local + 1; m++)
         {
-          for (Index m = 0; m<max_m_local + 1; m++)
-          {
-            Index local_idx = (Index) max_l_local*m - (m-1)*m/2 + l;
-            Index global_idx = (Index) max_l*m - (m-1)*m/2 + l;
-            ext_mat[i_ss][i_se](joker,joker,global_idx,joker,joker)
-                    = ext_mat_temp(joker,joker,local_idx,joker,joker);
-            abs_vec[i_ss][i_se](joker,joker,global_idx,joker)
-                    = abs_vec_temp(joker,joker,local_idx,joker);
+          Index local_idx = (Index) max_l_local*m - (m-1)*m/2 + l;
+          Index global_idx = (Index) max_l*m - (m-1)*m/2 + l;
+          ext_mat[i_ss][i_se](joker,joker,global_idx,joker,joker)
+                  = ext_mat_temp(joker,joker,local_idx,joker,joker);
+          abs_vec[i_ss][i_se](joker,joker,global_idx,joker)
+                  = abs_vec_temp(joker,joker,local_idx,joker);
         }
       }
       i_se_flat++;
@@ -714,8 +714,9 @@ void opt_prop_1ScatElem(//Output
   }
 }
 
+
 /*
- Similar to opt_prop_1ScatElemSpectral, but only temperature interpolation,
+ Similar to opt_prop_1ScatElem, but only temperature interpolation,
  because the coefficients do not need to be interpolated.
 
   \param[out] ext_mat    1-scattering element extinction matrix (over freq,
@@ -770,77 +771,11 @@ void opt_prop_1ScatElemSpectral(//Output
   // Determine T-interpol order as well as interpol positions and weights (they
   // are the same for all directions (and freqs), ie it is sufficient to
   // calculate them once).
-  const Index nTin = ssd.T_grid.nelem();
   Index this_T_interp_order = -1;
   ArrayOfGridPosPoly T_gp(nTout);
   Matrix T_itw;
-  if( nTin>1 )
-  {
-    this_T_interp_order = min(t_interp_order, nTin-1);
-    T_itw.resize(nTout, this_T_interp_order+1);
-
-    // we need to check T-grid exceedance. and catch these cases (because T
-    // is assumed to correspond to a location and T-exceedance is ok when pnd=0
-    // there. however, here we do not know pnd.) and report them to have the
-    // calling method dealing with it.
-
-    // we set the extrapolfax explicitly and use it here as well as in
-    // gridpos_poly below.
-    const Numeric extrapolfac=0.5;
-    const Numeric lowlim = ssd.T_grid[0] -
-                           extrapolfac * (ssd.T_grid[1]-ssd.T_grid[0]);
-    const Numeric uplim = ssd.T_grid[nTin-1] +
-                          extrapolfac * (ssd.T_grid[nTin-1]-ssd.T_grid[nTin-2]);
-
-    bool any_T_exceed = false;
-    for( Index Tind=0; Tind<nTout; Tind++ )
-    {
-      if( T_array[Tind]<lowlim || T_array[Tind]>uplim )
-      {
-        t_ok[Tind] = -1.;
-        any_T_exceed = true;
-      }
-      else
-        t_ok[Tind] = 1.;
-    }
-    if( any_T_exceed )
-    {
-      GridPosPoly dummy_gp;
-      dummy_gp.idx.resize(this_T_interp_order+1);
-      dummy_gp.w.resize(this_T_interp_order+1);
-      for (Index i=0; i<=this_T_interp_order; ++i)
-        dummy_gp.idx[i] = i;
-      dummy_gp.w = 0.;
-      dummy_gp.w[0] = 1.;
-      bool grid_unchecked = true;
-
-      for( Index iT=0; iT<nTout; iT++ )
-      {
-        if( t_ok[iT]<0 )
-          // setup T-exceed points with dummy grid positions
-          T_gp[iT] = dummy_gp;
-        else
-        {
-          if( grid_unchecked )
-          {
-            chk_interpolation_grids(
-              "Temperature interpolation in opt_prop_1ScatElem",
-              ssd.T_grid, T_array[Range(iT,1)], this_T_interp_order);
-            grid_unchecked = false;
-          }
-          gridpos_poly(T_gp[iT], ssd.T_grid, T_array[iT], this_T_interp_order,
-                       extrapolfac);
-        }
-      }
-    }
-    else
-      gridpos_poly(T_gp, ssd.T_grid, T_array, this_T_interp_order, extrapolfac);
-    interpweights(T_itw, T_gp);
-  }
-  else
-  {
-    t_ok = 1.;
-  }
+  ssd_tinterp_parameters( t_ok, this_T_interp_order, T_gp, T_itw,
+                          ssd.T_grid, T_array, t_interp_order );
 
   const Index next = ssd.ext_mat_data_real.ncols();
   const Index nabs = ssd.abs_vec_data_real.ncols();
@@ -848,62 +783,49 @@ void opt_prop_1ScatElemSpectral(//Output
   if( this_T_interp_order<0 ) // just extract (and unpack) ext and abs data
                                 // for the fs, the Tin, and the dirin and sort
                                 // (copy) into the output fs, Ts, and dirs.
-    {
-      Tensor3 ext_mat_tmp(nf,stokes_dim,stokes_dim);
-      Matrix abs_vec_tmp(nf,stokes_dim);
-      for( Index find=0; find<nf; find++ )
-      {
-        ext_mat_SSD2Stokes(ext_mat_tmp(find,joker,joker),
-                           ssd.ext_mat_data_real(find+f_start,0,0,joker),
+  {
+    Tensor4 ext_mat_tmp(nf, nCoeff, stokes_dim, stokes_dim);
+    Tensor3 abs_vec_tmp(nf, nCoeff, stokes_dim);
+    for (Index Dind = 0; Dind < nCoeff; Dind++) {
+      for (Index find = 0; find < nf; find++) {
+        ext_mat_SSD2Stokes(ext_mat_tmp(find, Dind, joker, joker),
+                           ssd.ext_mat_data_real(find + f_start, 0, Dind, joker),
                            stokes_dim, ptype);
-        abs_vec_SSD2Stokes(abs_vec_tmp(find,joker),
-                           ssd.abs_vec_data_real(find+f_start,0,0,joker),
+        abs_vec_SSD2Stokes(abs_vec_tmp(find, Dind, joker),
+                           ssd.abs_vec_data_real(find + f_start, 0, Dind, joker),
                            stokes_dim, ptype);
       }
-      for( Index Tind=0; Tind<nTout; Tind++ )
-        for( Index dind=0; dind<nCoeff; dind++ )
-        {
-          ext_mat(joker,Tind,dind,joker,joker) = ext_mat_tmp;
-          abs_vec(joker,Tind,dind,joker) = abs_vec_tmp;
+    }
+    for (Index Tind = 0; Tind < nTout; Tind++) {
+      ext_mat(joker, Tind, joker, joker, joker) = ext_mat_tmp;
+      abs_vec(joker, Tind, joker, joker) = abs_vec_tmp;
+    }
+  }
+  else // T-interpolation required. To be done on the compact ssd format.
+  {
+    Tensor4 ext_mat_tmp(nf,nTout,nCoeff,next);
+    Tensor4 abs_vec_tmp(nf,nTout,nCoeff,nabs);
+    for( Index find=0; find<nf; find++ ) {
+        for (Index dind = 0; dind < nCoeff; dind++) {
+            for (Index nst = 0; nst < ext_mat_tmp.ncols(); nst++)
+                 interp(ext_mat_tmp(find, joker, dind, nst), T_itw,
+                       ssd.ext_mat_data_real(find + f_start, joker, dind, nst), T_gp);
+            for (Index Tind = 0; Tind < nTout; Tind++)
+                    ext_mat_SSD2Stokes(ext_mat(find, Tind, dind, joker, joker),
+                                       ext_mat_tmp(find, Tind, dind, joker),
+                                       stokes_dim, ptype);
+
+            for (Index nst = 0; nst < abs_vec_tmp.ncols(); nst++)
+                interp(abs_vec_tmp(find,joker, dind, nst), T_itw,
+                       ssd.abs_vec_data_real(find + f_start, joker, dind, nst), T_gp);
+            for (Index Tind = 0; Tind < nTout; Tind++)
+                    abs_vec_SSD2Stokes(abs_vec(find, Tind, dind, joker),
+                                       abs_vec_tmp(find, Tind, dind, joker),
+                                       stokes_dim, ptype);
         }
     }
-    else // T-interpolation required (but not dir). To be done on the compact
-         // ssd format.
-    {
-      Tensor4 ext_mat_tmp(nf,nTout,nCoeff,next);
-      Tensor4 abs_vec_tmp(nf,nTout,nCoeff,nabs);
-      Matrix ext_mat_tmp_ssd(nTout,ssd.ext_mat_data_real.ncols());
-      Matrix abs_vec_tmp_ssd(nTout,ssd.abs_vec_data_real.ncols());
-      for( Index find=0; find<nf; find++ ) {
-          for (Index dind = 0; dind < nCoeff; dind++) {
-              for (Index nst = 0; nst < ext_mat_tmp.ncols(); nst++)
-
-                  interp(ext_mat_tmp(find, joker, dind, nst), T_itw,
-                         ssd.ext_mat_data_real(find + f_start, joker, dind, nst), T_gp);
-              for (Index Tind = 0; Tind < nTout; Tind++)
-                  if (t_ok[Tind] > 0.)
-                      ext_mat_SSD2Stokes(ext_mat(find, Tind, dind, joker, joker),
-                                         ext_mat_tmp(find, Tind, dind, joker),
-                                         stokes_dim, ptype);
-                  else
-                      ext_mat(find, Tind, dind,  joker, joker) = 0.;
-
-
-              for (Index nst = 0; nst < abs_vec_tmp_ssd.ncols(); nst++)
-                  interp(abs_vec_tmp(find,joker, dind, nst), T_itw,
-                         ssd.abs_vec_data_real(find + f_start, joker, dind, nst), T_gp);
-              for (Index Tind = 0; Tind < nTout; Tind++)
-                  if (t_ok[Tind] > 0.)
-                      abs_vec_SSD2Stokes(abs_vec(find, Tind, dind, joker),
-                                         abs_vec_tmp(find, Tind, dind, joker),
-                                         stokes_dim, ptype);
-                  else
-                      abs_vec(find, Tind, dind, joker) = 0.;
-          }
-      }
-    }
+  }
 }
-
 
 
 //! Extinction matrix scat_data to stokes format conversion.
@@ -1246,9 +1168,12 @@ void pha_mat_NScatElems(//Output
   \date   2018-03-24
 */
 void pha_mat_NScatElemsSpectral(//Output
-                        ArrayOfArrayOfTensor6& pha_mat, // [nss][nse](nf,nT,npdir,nidir,nst,nst)
+                        ArrayOfArrayOfTensor6& pha_mat_real, // [nss][nse](nf,nT,npdir,nidir,nst,nst)
+                        ArrayOfArrayOfTensor6& pha_mat_imag, // [nss][nse](nf,nT,npdir,nidir,nst,nst)
                         ArrayOfArrayOfIndex& ptypes,
                         Matrix& t_ok,
+                        bool& any_m_inc,
+                        bool& any_m_sca,
                         //Input
                         const ArrayOfArrayOfSpectralSingleScatteringData& scat_data_spectral,
                         const Index& stokes_dim,
@@ -1278,7 +1203,8 @@ void pha_mat_NScatElemsSpectral(//Output
   const Index nT = T_array.nelem();
 
   const Index nss = scat_data_spectral.nelem();
-  pha_mat.resize(nss);
+  pha_mat_real.resize(nss);
+  pha_mat_imag.resize(nss);
   ptypes.resize(nss);
 
   const Index Nse_all = TotalNumberOfElements(scat_data_spectral);
@@ -1292,12 +1218,14 @@ void pha_mat_NScatElemsSpectral(//Output
   Index max_m_inc = 0;
   Index max_nlm_inc;
   Index max_l_inc_local;
+  Index max_m_inc_local;
   Index max_l_sca = 0;
   Index max_m_sca = 0;
   Index max_nlm_sca;
   Index max_l_sca_local;
   Index max_m_sca_local;
-  Tensor6 pha_mat_temp;
+  Tensor6 pha_mat_real_temp;
+  Tensor6 pha_mat_imag_temp;
   // First find the maximum l and m in the data (sort of a dry run of the loop
   // below...)
   for( Index i_ss=0; i_ss<nss; i_ss++ )
@@ -1305,10 +1233,10 @@ void pha_mat_NScatElemsSpectral(//Output
       Index nse = scat_data_spectral[i_ss].nelem();
       for (Index i_se = 0; i_se < nse; i_se++)
       {
-          nl_inc = max(scat_data_spectral[i_ss][i_se].coeff_inc(0,joker));
-          nm_inc = max(scat_data_spectral[i_ss][i_se].coeff_inc(1,joker));
-          nl_sca = max(scat_data_spectral[i_ss][i_se].coeff_sca(0,joker));
-          nm_sca = max(scat_data_spectral[i_ss][i_se].coeff_sca(1,joker));
+          nl_inc = (Index) max(scat_data_spectral[i_ss][i_se].coeff_inc(0,joker));
+          nm_inc = (Index) max(scat_data_spectral[i_ss][i_se].coeff_inc(1,joker));
+          nl_sca = (Index) max(scat_data_spectral[i_ss][i_se].coeff_sca(0,joker));
+          nm_sca = (Index) max(scat_data_spectral[i_ss][i_se].coeff_sca(1,joker));
           // Find maximum coefficients in incident direction
           if (nl_inc > max_l_inc) // find maximum number of l coefficients
           {
@@ -1329,22 +1257,106 @@ void pha_mat_NScatElemsSpectral(//Output
           }
       }
   }
+  // Calculate the maximum number of coefficients for the INCIDENT DIRECTION
+  // Here we deal with transformed complex data, because the coefficients
+  // form the first transformation are complex!
+  any_m_inc = (max_m_inc > 0);
+  // Check (either here or elsewhere) that mmax is either
+  // lmax or 0!
+  assert(!max_m_inc || max_l_inc == max_m_inc);
+  // Set the number of coefficients (and indices)
+  if (any_m_inc)
+  {
+    // See DOC
+    max_nlm_inc = (Index) (max_l_inc + 1) * (max_l_inc + 1 );
+  }
+  else
+  {
+    max_nlm_inc = max_l_inc + 1;
+  }
+  // Calculate the maximum number of coefficients for the SCATTERED DIRECTION
+  any_m_sca = (max_m_sca > 0);
+  // Check (either here or elsewhere) that mmax is either
+  // lmax or 0!
+  assert(!max_m_sca || max_l_sca == max_m_sca);
+  // Set the number of coefficients (and indices)
+  if (any_m_sca)
+  {
+    // See DOC
+    max_nlm_sca = (Index) (max_l_sca + 1) * (max_l_sca + 2) / 2;
+  }
+  else
+  {
+    max_nlm_sca = max_l_sca + 1;
+  }
+  // Calculate temperature interpolated phase matrix for every particle element
+  // and size and then map the coefficients to the highest coefficients, to be
+  // able to average the data later
   for( Index i_ss=0; i_ss<nss; i_ss++ )
   {
     Index nse = scat_data_spectral[i_ss].nelem();
-    pha_mat[i_ss].resize(nse);
+    pha_mat_real[i_ss].resize(nse);
+    pha_mat_imag[i_ss].resize(nse);
     ptypes[i_ss].resize(nse);
 
     for( Index i_se=0; i_se<nse; i_se++ )
       {
-        nCoeff_inc = scat_data_spectral[i_ss][i_se].coeff_inc.ncols();
         nCoeff_sca = scat_data_spectral[i_ss][i_se].coeff_sca.ncols();
-        pha_mat_temp.resize(nf, nT, nCoeff_sca, nCoeff_inc, stokes_dim, stokes_dim);
+        max_l_inc_local = (Index) max(scat_data_spectral[i_ss][i_se].coeff_inc(0,joker));
+        max_m_inc_local = (Index) max(scat_data_spectral[i_ss][i_se].coeff_inc(1,joker));
+        max_l_sca_local = (Index) max(scat_data_spectral[i_ss][i_se].coeff_sca(0,joker));
+        max_m_sca_local = (Index) max(scat_data_spectral[i_ss][i_se].coeff_sca(1,joker));
 
-        //pha_mat_1ScatElem(pha_mat[i_ss][i_se],
-         //                 ptypes[i_ss][i_se], t_ok(i_se_flat,joker),
-        //                  scat_data[i_ss][i_se],
-         //                   T_array, pdir_array, idir_array, f_start, t_interp_order);
+        // The number of coefficients in the phase matrix does not equal the
+        // number of coefficients in coeff_inc, b\c the phase matrix is transformed
+        // over complex data (the coefficients from the first transformation)
+        // The number of coefficients needed for the incident direction is
+        // calculated here
+        if (max_m_inc_local > 0)
+          nCoeff_inc = (Index) (max_l_inc_local + 1) * (max_l_inc_local + 1);
+        else
+          nCoeff_inc = max_l_inc + 1;
+
+        pha_mat_real_temp.resize(nf, nT, nCoeff_sca, nCoeff_inc, stokes_dim, stokes_dim);
+        pha_mat_imag_temp.resize(nf, nT, nCoeff_sca, nCoeff_inc, stokes_dim, stokes_dim);
+
+        pha_mat_1ScatElemSpectral(pha_mat_real_temp,pha_mat_imag_temp,
+                          ptypes[i_ss][i_se], t_ok(i_se_flat,joker),
+                          scat_data_spectral[i_ss][i_se],
+                          T_array, f_start, t_interp_order);
+
+        // Do the mapping to the highest l_inc, m_inc and l_sca and m_sca (see DOC)
+        pha_mat_real[i_ss][i_se].resize(nf, nT, max_nlm_sca, max_nlm_inc,
+                                        stokes_dim, stokes_dim);
+        pha_mat_imag[i_ss][i_se].resize(nf, nT, max_nlm_sca, max_nlm_inc,
+                                          stokes_dim, stokes_dim);
+        // INCOMING (complex data coefficient mapping)
+        //          here we dont need to do complicated mapping b\c more incides are
+        //          coming at the end.
+        // FIXME: Am I doing this right? What if the maximum coefficients array has
+        // m, but the local does not??
+        for (Index local_idx = 0; local_idx<nCoeff_inc; local_idx++)
+        {
+            pha_mat_real[i_ss][i_se](joker,joker,joker,local_idx,joker,joker)
+                    = pha_mat_real_temp(joker,joker,joker,local_idx,joker,joker);
+            pha_mat_imag[i_ss][i_se](joker,joker,joker,local_idx,joker,joker)
+                    = pha_mat_imag_temp(joker,joker,joker,local_idx,joker,joker);
+        }
+        // SCATTERED (real data coefficient mapping)
+        //           here we need some more complicated mapping b\c higher indices
+        //           are sorted in between the existing indices
+        for (Index l = 0; l<max_l_sca_local + 1; l++)
+        {
+          for (Index m = 0; m<max_m_sca_local + 1; m++)
+          {
+            Index local_idx = (Index) max_l_sca_local*m - (m-1)*m/2 + l;
+            Index global_idx = (Index) max_l_sca*m - (m-1)*m/2 + l;
+            pha_mat_real[i_ss][i_se](joker,joker,global_idx,joker,joker,joker)
+                    = pha_mat_real_temp(joker,joker,local_idx,joker,joker,joker);
+            pha_mat_imag[i_ss][i_se](joker,joker,global_idx,joker,joker,joker)
+                    = pha_mat_imag_temp(joker,joker,local_idx,joker,joker,joker);
+          }
+        }
         i_se_flat++;
       }
   }
@@ -1672,6 +1684,138 @@ void pha_mat_1ScatElem(//Output
                 pha_mat(find,joker,pdir,idir,3,1) *= -1;
               }
         }
+      }
+    }
+  }
+}
+
+
+/*
+ Similar to pha_mat_1ScatElem, but only temperature interpolation,
+ because the coefficients do not need to be interpolated.
+
+  \param[out] ext_mat    1-scattering element extinction matrix (over freq,
+                           temp, propagation direction).
+  \param[out] abs_vec    1-scattering element absorption vector (over freq,
+                           temp, propagation direction).
+  \param[out] ptype      Type of scattering element.
+  \param[out] t_ok       Flag whether T-interpol valid (length of T_array).
+  \param[in]  ssd        Single scattering data of one scattering element.
+  \param[in]  T_array    Temperatures to extract ext/abs for.
+  \param[in]  dir_array  Propagation directions to extract ext/abs for (as
+                           pairs of zenith and azimuth angle per direction).
+  \param[in]  f_start    Start index of frequency/ies to extract.
+  \param[in]  t_interp_order  Temperature interpolation order.
+
+  \author Jakob Doerr
+  \date   2018-07-18
+ */
+void pha_mat_1ScatElemSpectral(//Output
+        Tensor6View pha_mat_real, // nf, nT, ncoeff_sca, ncoeff_inc, nst, nst
+        Tensor6View pha_mat_imag, // nf, nT, ncoeff_sca, ncoeff_inc, nst, nst
+        Index& ptype,
+        VectorView t_ok,
+        //Input
+        const SpectralSingleScatteringData& ssd,
+        const Vector& T_array,
+        const Index& f_start,
+        const Index& t_interp_order)
+{
+  //FIXME: So far only implemented for real coefficients of ext_mat and abs_vec!!
+  assert( ssd.ptype == PTYPE_TOTAL_RND or ssd.ptype == PTYPE_AZIMUTH_RND );
+
+  const Index nf = pha_mat_real.nvitrines();
+  if( nf>1 )
+  { assert( nf == ssd.f_grid.nelem() ); }
+
+  const Index nTout = T_array.nelem();
+  assert( pha_mat_real.nshelves() == nTout );
+  assert( t_ok.nelem() == nTout );
+
+  const Index max_l = (Index) max(ssd.coeff_inc(0,joker));
+  const Index max_m = (Index) max(ssd.coeff_inc(1,joker));
+  Index nCoeff_inc;
+  if (max_m > 0)
+    nCoeff_inc = (Index) (max_l + 1) * (max_l + 1);
+  else
+    nCoeff_inc = max_l + 1;
+  assert( pha_mat_real.npages() == nCoeff_inc);
+
+  const Index nCoeff_sca = ssd.coeff_sca.ncols();
+  assert( pha_mat_real.nbooks() == nCoeff_sca);
+
+  const Index stokes_dim = pha_mat_real.ncols();
+
+  ptype = ssd.ptype;
+  // Determine T-interpol order as well as interpol positions and weights (they
+  // are the same for all directions (and freqs), ie it is sufficient to
+  // calculate them once).
+  Index this_T_interp_order = -1;
+  ArrayOfGridPosPoly T_gp(nTout);
+  Matrix T_itw;
+  ssd_tinterp_parameters( t_ok, this_T_interp_order, T_gp, T_itw,
+                          ssd.T_grid, T_array, t_interp_order );
+
+  const Index npha = ssd.pha_mat_data_real.ncols();
+
+  if( this_T_interp_order<0 ) // just extract (and unpack) ext and abs data
+    // for the fs, the Tin, and the dirin and sort
+    // (copy) into the output fs, Ts, and dirs.
+  {
+    Tensor5 pha_mat_real_tmp(nf,nCoeff_sca,nCoeff_inc,stokes_dim,stokes_dim);
+    Tensor5 pha_mat_imag_tmp(nf,nCoeff_sca,nCoeff_inc,stokes_dim,stokes_dim);
+    for( Index find=0; find<nf; find++ )
+    {
+      for (Index nst1; nst1 < stokes_dim; nst1++)
+      {
+        for (Index nst2; nst2 < stokes_dim; nst2++)
+        {
+          pha_mat_real_tmp(find,joker,joker,nst1,nst2) =
+                  ssd.pha_mat_data_real(find + f_start,0,joker,joker,nst1*4+nst2);
+          pha_mat_imag_tmp(find,joker,joker,nst1,nst2) =
+                  ssd.pha_mat_data_imag(find + f_start,0,joker,joker,nst1*4+nst2);
+        }
+      }
+    }
+    for( Index Tind=0; Tind<nTout; Tind++ )
+    {
+        pha_mat_real(joker,Tind,joker,joker,joker,joker) =
+                pha_mat_real_tmp;
+        pha_mat_imag(joker,Tind,joker,joker,joker,joker) =
+                pha_mat_imag_tmp;
+    }
+  }
+  else // T-interpolation required (but not dir). To be done on the compact
+    // ssd format.
+  {
+    Tensor5 pha_mat_real_tmp(nf,nTout,nCoeff_inc,nCoeff_sca,npha);
+    Tensor5 pha_mat_imag_tmp(nf,nTout,nCoeff_inc,nCoeff_sca,npha);
+
+    for( Index find=0; find<nf; find++ )
+    {
+      for (Index dinc = 0; dinc < nCoeff_sca; dinc++)
+      {
+        for (Index dsca = 0; dsca < nCoeff_sca; dsca++)
+        {
+          for (Index nst = 0; nst < npha; nst++)
+          {
+            interp(pha_mat_real_tmp(find, joker, dsca, dinc, nst), T_itw,
+                   ssd.pha_mat_data_real(find + f_start, joker, dsca, dinc, nst), T_gp);
+            interp(pha_mat_imag_tmp(find, joker, dsca, dinc, nst), T_itw,
+                   ssd.pha_mat_data_imag(find + f_start, joker, dsca, dinc, nst), T_gp);
+          }
+        }
+      }
+    }
+    for (Index nst1; nst1 < stokes_dim; nst1++)
+    {
+      for (Index nst2; nst2 < stokes_dim; nst2++)
+      {
+        pha_mat_real(joker,joker,joker,joker,nst1,nst2) =
+                ssd.pha_mat_data_real(joker,joker,joker,joker,nst1*4 + nst2);
+        pha_mat_imag(joker,joker,joker,joker,nst1,nst2) =
+                ssd.pha_mat_data_imag(joker,joker,joker,joker,nst1*4 + nst2);
+
       }
     }
   }
