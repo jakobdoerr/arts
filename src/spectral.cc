@@ -68,114 +68,236 @@ void methodname(//Output
                 const type& name)
 {
 }
+
+
 */
 
 //! Transforms spectral extinction matrix and absorption vector to grid
 
 /*!
-  Descript/Doc
+  Transforms given spectral extinction matrix and absorption vector onto
+  a discrete grid provided as input using SHTns
 
-  \param[out] name  desc.
-  \param[in]  name  desc.
+  \param[out] ext_matrix  The extinction matrix on the discrete angular grid
+  \param[out]  abs_vector  The absorption vector on the discrete angular grid
+
+  \param[in]  ext_matrix_spectral  The extinction matric on the spectral grid
+  \param[in]  abs_vector_spectral  The absorption vector on the spectral grid
+  \param[in]  dir_array  The discrete angular grid (as pairs of theta and phi)
+  \param[in]  any_m  Flag wether any m coefficients are present
+
 
   \author Jakob Doerr
   \date   2018-05-25
 */
 
 void opt_prop_SpecToGrid(//Output
-                Tensor6View ext_matrix,
-                Tensor5View abs_vector,
+                Tensor5View ext_matrix,
+                Tensor4View abs_vector,
                 //Input
                 const Tensor5& ext_matrix_spectral,
                 const Tensor4& abs_vector_spectral,
-                const Vector& za_grid,
-                const Vector& aa_grid,
-                const bool& any_m)
-{
-    // Initialize gridded fields
-    ext_matrix = 0.;
-    abs_vector = 0.;
-    shtns_cfg shtns;                // handle to a sht transform configuration
-    long int lmax,mmax,nlat,nphi,mres, NLM;
-    complex<double>  *Qlm;      // spherical harmonics coefficients (l,m space): complex numbers.
-    long int i,im,lm;
-    double t;
-    lmax = ext_matrix_spectral.npages();       nlat = 32;
-    nphi = 10;
-    mres = 1;
-    if (any_m)
-        mmax = lmax;
-    else
-        mmax = 0;
-    shtns_verbose(0);                       // displays informations during initialization.
-    shtns_use_threads(0);           // enable multi-threaded transforms (if supported).
-    shtns = shtns_init( sht_gauss, lmax, mmax, mres, nlat, nphi );
-    //shtns = shtns_create(lmax, mmax, mres, sht_orthonormal | SHT_REAL_NORM);
-    //shtns_set_grid(shtns, sht_gauss, 0.0, nlat, nphi);
-    NLM = shtns->nlm;
-    // Memory allocation : the use of fftw_malloc is required because we need proper 16-byte alignement.
-    // allocate spatial fields.
-    // allocate SH representations.
-    Qlm = (complex<double> *) fftw_malloc( NLM * sizeof(complex<double>));
-
-    for (Index f_index = 0; f_index < ext_matrix_spectral.nshelves(); f_index++)
+                const Matrix& dir_array,
+                const bool& any_m) {
+  // Initialize gridded fields
+  ext_matrix = 0.;
+  abs_vector = 0.;
+  shtns_cfg shtns;                // handle to a sht transform configuration
+  complex<double> *Qlm;      // spherical harmonics coefficients (l,m space): complex numbers.
+  int lmax = (int) ext_matrix_spectral.npages() - 1;
+  int nlat = 32;
+  int nphi = 10;
+  int mres = 1;
+  int mmax,NLM;
+  if (any_m)
+    mmax = lmax;
+  else
+    mmax = 0;
+  shtns_verbose(0);                       // displays informations during initialization.
+  shtns_use_threads(0);           // enable multi-threaded transforms (if supported).
+  shtns = shtns_init(sht_gauss, lmax, mmax, mres, nlat, nphi);
+  //shtns = shtns_create(lmax, mmax, mres, sht_orthonormal | SHT_REAL_NORM);
+  //shtns_set_grid(shtns, sht_gauss, 0.0, nlat, nphi);
+  NLM = shtns->nlm;
+  // Memory allocation : the use of fftw_malloc is required because we need proper 16-byte alignement.
+  // allocate spatial fields.
+  // allocate SH representations.
+  Qlm = (complex<double> *) fftw_malloc(NLM * sizeof(complex<double>));
+  for (Index f_index = 0; f_index < ext_matrix_spectral.nshelves(); f_index++)
+  {
+    for (Index p_index = 0; p_index < ext_matrix_spectral.nbooks(); p_index++)
     {
-        for (Index p_index = 0; p_index < ext_matrix_spectral.nbooks(); p_index++)
+      for (Index nst1 = 0; nst1 < ext_matrix_spectral.nrows(); nst1++)
+      {
+        for (Index nst2 = 0; nst2 < ext_matrix_spectral.ncols(); nst2++)
         {
-            for (Index nst1 = 0; nst1 < ext_matrix_spectral.nrows(); nst1++)
-            {
-                for (Index nst2 = 0; nst2 < ext_matrix_spectral.ncols(); nst2++)
-                {
-                    for (Index i_lm = 0; i_lm < lmax; i_lm ++)
-                    {
-                        Qlm[i_lm] = (complex<double>) ext_matrix_spectral(
-                                f_index,p_index,i_lm,nst1,nst2);
-
-                    }
-                    for (Index theta = 0; theta < za_grid.nelem(); theta++)
-                    {
-                        for (Index phi = 0; phi < aa_grid.nelem(); phi++)
-                        {
-                            ext_matrix(f_index, p_index, theta, phi, nst1, nst2) =
-                                    SH_to_point(shtns, Qlm, cos(za_grid[theta]), aa_grid[phi]);
-                        }
-                    }
-                }
-            }
-            for (Index nst1 = 0; nst1 < abs_vector_spectral.ncols(); nst1++)
-            {
-                spec_to_grid(abs_vector(f_index,p_index,joker,joker,nst1),
-                             abs_vector_spectral(f_index,p_index,joker,nst1),
-                             za_grid, aa_grid);
-            }
+          for (Index i_lm = 0; i_lm < NLM; i_lm++)
+          {
+            Qlm[i_lm] = (complex<double>) ext_matrix_spectral(
+                           f_index, p_index, i_lm, nst1, nst2);
+          }
+          for (Index dind = 0; dind < dir_array.nrows(); dind++)
+          {
+            ext_matrix(f_index, p_index, dind, nst1, nst2) =
+                        SH_to_point(shtns, Qlm, cos(dir_array(dind, 0)), dir_array(dind, 1));
+          }
         }
+      }
+      for (Index nst1 = 0; nst1 < abs_vector_spectral.ncols(); nst1++)
+      {
+        for (Index i_lm = 0; i_lm < lmax; i_lm++)
+        {
+          Qlm[i_lm] = (complex<double>) abs_vector_spectral(
+                      f_index, p_index, i_lm, nst1);
+        }
+        for (Index dind = 0; dind < dir_array.nrows(); dind++)
+        {
+          abs_vector(f_index, p_index, dind, nst1) =
+                    SH_to_point(shtns, Qlm, cos(dir_array(dind, 0)), dir_array(dind, 1));
+        }
+      }
     }
+  }
 }
 
 
-//! Spectral transformation Spectral ---> Grid
-/*!
-  Descript/Doc
+//! Transforms spectral phase matrix to grid
 
-  \param[out] name  desc.
-  \param[in]  name  desc.
+/*!
+  Transforms given spectral phase matrix onto
+  a discrete grid provided as input using SHTns
+
+  \param[out] ext_matrix  The extinction matrix on the discrete angular grid
+  \param[out]  abs_vector  The absorption vector on the discrete angular grid
+
+  \param[in]  ext_matrix_spectral  The extinction matric on the spectral grid
+  \param[in]  abs_vector_spectral  The absorption vector on the spectral grid
+  \param[in]  dir_array  The discrete angular grid (as pairs of theta and phi)
+  \param[in]  any_m  Flag wether any m coefficients are present
+
 
   \author Jakob Doerr
-  \date   2018-05-25
+  \date   2018-07-25
 */
 
-void spec_to_grid(//Output
-                MatrixView grid_field,
-                //Input
-                const Vector& spec_field,
-                const Vector& za_grid,
-                const Vector& aa_grid)
+void pha_mat_SpecToGrid(//Output
+        Tensor6View pha_matrix,
+        //Input
+        const Tensor6& pha_mat_real_spectral,
+        const Tensor6& pha_mat_imag_spectral,
+        const Matrix& pdir_array,
+        const Matrix& idir_array,
+        const Index& ptype,
+        const bool& any_m_inc,
+        const bool& any_m_sca)
 {
+  // Initialize gridded fields
+  pha_matrix = 0.;
+  shtns_cfg shtns_inc, shtns_sca;                // handle to a sht transform configuration
+  complex<double> *Qlm_inc, *Qlm_sca;      // spherical harmonics coefficients (l,m space): complex numbers.
+  int lmax_inc = (int) pha_mat_real_spectral.npages() - 1;
+  int lmax_sca = (int) pha_mat_real_spectral.nbooks() - 1;
+  int nlat = 32;
+  int nphi = 10;
+  int mres = 1;
+  int mmax_inc,mmax_sca,NLM_inc, NLM_sca;
+  if (any_m_inc)
+    mmax_inc = lmax_inc;
+  else
+    mmax_inc = 0;
+  if (any_m_sca)
+    mmax_sca = lmax_sca;
+  else
+    mmax_sca = 0;
 
+  shtns_verbose(0);                       // displays informations during initialization.
+  shtns_use_threads(0);           // enable multi-threaded transforms (if supported).
+  shtns_inc = shtns_init(sht_gauss, lmax_inc, mmax_inc, mres, nlat, nphi);
+  shtns_sca = shtns_init(sht_gauss, lmax_sca, mmax_sca, mres, nlat, nphi);
 
+  //shtns = shtns_create(lmax, mmax, mres, sht_orthonormal | SHT_REAL_NORM);
+  //shtns_set_grid(shtns, sht_gauss, 0.0, nlat, nphi);
+  NLM_inc = shtns_inc->nlm;
+  NLM_sca = shtns_sca->nlm;
+  // Memory allocation : the use of fftw_malloc is required because we need proper 16-byte alignement.
+  // allocate spatial fields.
+  // allocate SH representations.
+  Qlm_inc = (complex<double> *) fftw_malloc(NLM_inc * sizeof(complex<double>));
+  Qlm_sca = (complex<double> *) fftw_malloc(NLM_sca * sizeof(complex<double>));
 
+  const Index nf = pha_matrix.nvitrines();
+  const Index nT = pha_matrix.nshelves();
+  const Index npDir = pdir_array.nrows();
+  assert( pha_matrix.nbooks() == npDir );
+
+  const Index niDir = idir_array.nrows();
+  assert( pha_matrix.npages() == niDir );
+
+  // FIXME: Get rid of this assertion later, b\c it can handle any ptype..
+  assert( ptype == PTYPE_TOTAL_RND or ptype == PTYPE_AZIMUTH_RND );
+
+  if ( ptype == PTYPE_TOTAL_RND)
+  {
+    for( Index pdir=0; pdir<npDir; pdir++ )
+    {
+      for (Index idir = 0; idir < niDir; idir++)
+      {
+        // calc scat ang theta from incident and prop dirs
+        Numeric theta = scat_angle(pdir_array(pdir,0), pdir_array(pdir,1),
+                                   idir_array(idir,0), idir_array(idir,1));
+        for (Index find = 0; find < nf; find++)
+        {
+          for (Index Tind = 0; Tind < nT; Tind++)
+          {
+            Vector pha_mat_int(pha_matrix.nrows()*pha_matrix.nrows());
+            for (Index st1 = 0; st1 < pha_matrix.nrows(); st1++)
+            {
+              for (Index st2 = 0; st2 < pha_matrix.ncols(); st2++)
+              {
+
+                for (Index p_lm = 0; p_lm < NLM_sca; p_lm++)
+                {
+                  for (Index i_lm = 0; i_lm < NLM_inc; i_lm++)
+                  {
+                    // First spectral transformation (incoming anlges)
+                    Qlm_inc[i_lm] = (complex<double>) pha_mat_real_spectral(
+                            find, Tind, p_lm, i_lm, st1, st2)
+                                    + pha_mat_imag_spectral(
+                            find, Tind, p_lm, i_lm, st1, st2) * sqrt(-1);
+                  }
+                  // Here the first trafo happens
+                  Qlm_sca[p_lm] = SH_to_point(shtns_inc,Qlm_inc,
+                            0,0);
+                }
+                // Second spectral transformation (scattered angles)
+                pha_mat_int[st1*4+st2] = SH_to_point(shtns_sca,Qlm_sca,cos(theta),0);
+              }
+            }
+            pha_mat_labCalc(pha_matrix(find,Tind,pdir,idir,joker,joker),pha_mat_int,
+                            pdir_array(pdir,0), pdir_array(pdir,1),
+                            idir_array(idir,0), idir_array(idir,1),
+                            theta);
+          }
+        }
+      }
+    }
+  } // FIXME: IS IT RIGHT LIKE THIS???                                                                                                                                                                                                                                                                                                           
+  else // ptype azi random (and general)
+  {
+    Index nDir=npDir*niDir;
+    Matrix delta_aa(npDir,niDir);
+
+    for( Index pdir=0; pdir<npDir; pdir++ )
+    {
+      for (Index idir = 0; idir < niDir; idir++)
+      {
+        delta_aa(pdir, idir) = pdir_array(pdir, 1) - idir_array(idir, 1) +
+                               (pdir_array(pdir, 1) - idir_array(idir, 1) < -180) * 360 -
+                               (pdir_array(pdir, 1) - idir_array(idir, 1) > 180) * 360;
+      }
+    }
+  }
 }
-
 
 
 

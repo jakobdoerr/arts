@@ -1139,7 +1139,7 @@ void pha_mat_NScatElems(//Output
 //! Phase matrices from all scattering elements.
 /*!
   Derives temperature and direction interpolated phase matrices for all
-  scattering elements present in scat_data.
+  scattering elements present in scat_data_spectral.
 
   ATTENTION:
   If scat_data has only one freq point, f_index=-1 (i.e. all) extracts only this
@@ -1153,7 +1153,7 @@ void pha_mat_NScatElems(//Output
                            propagation direction, incident direction).
   \param[out] ptypes     Scattering element types.
   \param[out] t_ok       Flag whether T-interpol valid (over scat elements, temp).
-  \param[in]  scat_data  as the WSV.
+  \param[in]  scat_data_spectral  as the WSV.
   \param[in]  stokes_dim as the WSV.
   \param[in]  T_array    Temperatures to extract pha for.
   \param[in]  pdir_array Propagation directions to extract pha for (as pairs of
@@ -1164,8 +1164,8 @@ void pha_mat_NScatElems(//Output
                            freqs available in ssd.
   \param[in]  t_interp_order  Temperature interpolation order.
 
-  \author Jana Mendrok
-  \date   2018-03-24
+  \author Jakob Doerr
+  \date   2018-07-24
 */
 void pha_mat_NScatElemsSpectral(//Output
                         ArrayOfArrayOfTensor6& pha_mat_real, // [nss][nse](nf,nT,npdir,nidir,nst,nst)

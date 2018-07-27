@@ -2302,7 +2302,6 @@ void par_optpropCalcSpectral(Tensor5View emis_vector,
 
     const Index Np_cloud = pnd_field.npages();
     const Index nummu = scat_za_grid.nelem()/2;
-    const Vector aa_grid_dummy(1,0.);
     bool any_m;
 
     assert( emis_vector.nbooks() == Np_cloud-1 );
@@ -2332,13 +2331,13 @@ void par_optpropCalcSpectral(Tensor5View emis_vector,
     opt_prop_Bulk( ext_mat_bulk, abs_vec_bulk, ptype_bulk,
                  ext_mat_ssbulk, abs_vec_ssbulk, ptype_ssbulk );
 
-    Tensor6 extinct_matrix_temp(abs_vec_bulk.nbooks(),Np_cloud,dir_array.nrows(),1,
+    Tensor5 extinct_matrix_temp(abs_vec_bulk.nbooks(),Np_cloud,dir_array.nrows(),
                                 ext_mat_bulk.nrows(),ext_mat_bulk.ncols());
-    Tensor5 emis_vec_temp(abs_vec_bulk.nbooks(),Np_cloud,dir_array.nrows(),1,
+    Tensor4 emis_vec_temp(abs_vec_bulk.nbooks(),Np_cloud,dir_array.nrows(),
                           abs_vec_bulk.ncols());
 
-    opt_prop_SpecToGrid(extinct_matrix_temp,emis_vec_temp,ext_mat_bulk,abs_vec_bulk,dir_array(joker,0),
-    aa_grid_dummy,any_m);
+    opt_prop_SpecToGrid(extinct_matrix_temp, emis_vec_temp, ext_mat_bulk, abs_vec_bulk,
+                        dir_array, any_m);
     // Calculate layer averaged extinction and absorption and sort into RT4-format
     // data tensors
     for (Index ipc = 0; ipc < Np_cloud-1; ipc++)
@@ -2356,18 +2355,18 @@ void par_optpropCalcSpectral(Tensor5View emis_vector,
             for (Index ist2=0; ist2<stokes_dim; ist2++)
             {
               extinct_matrix(fi,ipc,0,imu,ist2,ist1) = .5 *
-                ( extinct_matrix_temp(fi,ipc,imu,0,ist1,ist2) +
-                  extinct_matrix_temp(fi,ipc+1,imu,0,ist1,ist2) );
+                ( extinct_matrix_temp(fi,ipc,imu,ist1,ist2) +
+                  extinct_matrix_temp(fi,ipc+1,imu,ist1,ist2) );
               extinct_matrix(fi,ipc,1,imu,ist2,ist1) = .5 *
-                ( extinct_matrix_temp(fi,ipc,nummu+imu,0,ist1,ist2) +
-                  extinct_matrix_temp(fi,ipc+1,nummu+imu,0,ist1,ist2) );
+                ( extinct_matrix_temp(fi,ipc,nummu+imu,ist1,ist2) +
+                  extinct_matrix_temp(fi,ipc+1,nummu+imu,ist1,ist2) );
             }
             emis_vector(fi,ipc,0,imu,ist1) = .5 *
-              ( emis_vec_temp(fi,ipc,imu,0,ist1) +
-                emis_vec_temp(fi,ipc+1,imu,0,ist1) );
+              ( emis_vec_temp(fi,ipc,imu,ist1) +
+                emis_vec_temp(fi,ipc+1,imu,ist1) );
             emis_vector(fi,ipc,1,imu,ist1) = .5 *
-              ( emis_vec_temp(fi,ipc,nummu+imu,0,ist1) +
-                emis_vec_temp(fi,ipc+1,nummu+imu,0,ist1) );
+              ( emis_vec_temp(fi,ipc,nummu+imu,ist1) +
+                emis_vec_temp(fi,ipc+1,nummu+imu,ist1) );
           }
 //    }
   }

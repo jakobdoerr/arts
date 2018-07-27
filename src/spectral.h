@@ -38,19 +38,22 @@
 #include "gridded_fields.h"
 #include "propagationmatrix.h"
 
-void spec_to_grid(//Output
-        MatrixView grid_field,
-        //Input
-        const Vector& spec_field,
-        const Vector& za_grid,
-        const Vector& aa_grid);
 
 void opt_prop_SpecToGrid(//Output
-        Tensor6View ext_matrix,
-        Tensor5View abs_vector,
+        Tensor5View ext_matrix,
+        Tensor4View abs_vector,
         //Input
         const Tensor5& ext_matrix_spectral,
         const Tensor4& abs_vector_spectral,
-        const Vector& za_grid,
-        const Vector& aa_grid,
+        const Matrix& dir_array,
         const bool& any_m);
+
+void pha_mat_SpecToGrid(//Output
+        Tensor6View pha_matrix,
+        //Input
+        const Tensor6& pha_mat_real_spectral,
+        const Tensor6& pha_mat_imag_spectral,
+        const Matrix& pdir_array,
+        const Matrix& idir_array,
+        const bool& any_m_inc,
+        const bool& any_m_sca);
