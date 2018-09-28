@@ -1324,14 +1324,13 @@ void pha_mat_NScatElemsSpectral(//Output
                           ptypes[i_ss][i_se], t_ok(i_se_flat,joker),
                           scat_data_spectral[i_ss][i_se],
                           T_array, f_start, t_interp_order);
-
         // Do the mapping to the highest l_inc, m_inc and l_sca and m_sca (see DOC)
         pha_mat_real[i_ss][i_se].resize(nf, nT, max_nlm_sca, max_nlm_inc,
                                         stokes_dim, stokes_dim);
         pha_mat_imag[i_ss][i_se].resize(nf, nT, max_nlm_sca, max_nlm_inc,
                                           stokes_dim, stokes_dim);
         // INCOMING (complex data coefficient mapping)
-        //          here we dont need to do complicated mapping b\c more incides are
+        //          here we dont need to do complicated mapping b\c higher indices are
         //          coming at the end.
         // FIXME: Am I doing this right? What if the maximum coefficients array has
         // m, but the local does not??
@@ -1721,6 +1720,8 @@ void pha_mat_1ScatElemSpectral(//Output
         const Index& f_start,
         const Index& t_interp_order)
 {
+  pha_mat_imag = 0.;
+  pha_mat_real = 0.;
   //FIXME: So far only implemented for real coefficients of ext_mat and abs_vec!!
   assert( ssd.ptype == PTYPE_TOTAL_RND or ssd.ptype == PTYPE_AZIMUTH_RND );
 
@@ -1757,7 +1758,6 @@ void pha_mat_1ScatElemSpectral(//Output
                           ssd.T_grid, T_array, t_interp_order );
 
   const Index npha = ssd.pha_mat_data_real.ncols();
-
   if( this_T_interp_order<0 ) // just extract (and unpack) ext and abs data
     // for the fs, the Tin, and the dirin and sort
     // (copy) into the output fs, Ts, and dirs.
@@ -1766,9 +1766,9 @@ void pha_mat_1ScatElemSpectral(//Output
     Tensor5 pha_mat_imag_tmp(nf,nCoeff_sca,nCoeff_inc,stokes_dim,stokes_dim);
     for( Index find=0; find<nf; find++ )
     {
-      for (Index nst1; nst1 < stokes_dim; nst1++)
+      for (Index nst1=0; nst1 < stokes_dim; nst1++)
       {
-        for (Index nst2; nst2 < stokes_dim; nst2++)
+        for (Index nst2=0; nst2 < stokes_dim; nst2++)
         {
           pha_mat_real_tmp(find,joker,joker,nst1,nst2) =
                   ssd.pha_mat_data_real(find + f_start,0,joker,joker,nst1*4+nst2);
@@ -1788,8 +1788,8 @@ void pha_mat_1ScatElemSpectral(//Output
   else // T-interpolation required (but not dir). To be done on the compact
     // ssd format.
   {
-    Tensor5 pha_mat_real_tmp(nf,nTout,nCoeff_inc,nCoeff_sca,npha);
-    Tensor5 pha_mat_imag_tmp(nf,nTout,nCoeff_inc,nCoeff_sca,npha);
+    Tensor5 pha_mat_real_tmp(nf,nTout,nCoeff_sca,nCoeff_inc,npha);
+    Tensor5 pha_mat_imag_tmp(nf,nTout,nCoeff_sca,nCoeff_inc,npha);
 
     for( Index find=0; find<nf; find++ )
     {
@@ -1807,14 +1807,14 @@ void pha_mat_1ScatElemSpectral(//Output
         }
       }
     }
-    for (Index nst1; nst1 < stokes_dim; nst1++)
+    for (Index nst1=0; nst1 < stokes_dim; nst1++)
     {
-      for (Index nst2; nst2 < stokes_dim; nst2++)
+      for (Index nst2=0; nst2 < stokes_dim; nst2++)
       {
         pha_mat_real(joker,joker,joker,joker,nst1,nst2) =
-                ssd.pha_mat_data_real(joker,joker,joker,joker,nst1*4 + nst2);
+                pha_mat_real_tmp(joker,joker,joker,joker,nst1*4 + nst2);
         pha_mat_imag(joker,joker,joker,joker,nst1,nst2) =
-                ssd.pha_mat_data_imag(joker,joker,joker,joker,nst1*4 + nst2);
+                pha_mat_imag_tmp(joker,joker,joker,joker,nst1*4 + nst2);
 
       }
     }

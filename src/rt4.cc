@@ -1870,46 +1870,303 @@ void run_rt4_spectral( Workspace& ws,
       }
 
       Index pfct_failed = 0;
-      if( pndtot )
-      {
-        if( nummu_new<nummu )
-        {
-          if( !auto_inc_nstreams ) // all freq calculated before. just copy
-                                   // here. but only if needed.
+      if( pndtot ) {
+        if (nummu_new < nummu) {
+          if (!auto_inc_nstreams) // all freq calculated before. just copy
+            // here. but only if needed.
           {
-            if( emis_vector_allf.nshelves()!=1 )
-            {
-              emis_vector = emis_vector_allf(Range(f_index,1),
-                                             joker,joker,joker,joker);
-              extinct_matrix = extinct_matrix_allf(Range(f_index,1),
-                                                   joker,joker,joker,joker,joker);
+            if (emis_vector_allf.nshelves() != 1) {
+              emis_vector = emis_vector_allf(Range(f_index, 1),
+                                             joker, joker, joker, joker);
+              extinct_matrix = extinct_matrix_allf(Range(f_index, 1),
+                                                   joker, joker, joker, joker, joker);
             }
+          } else {
+            par_optpropCalcSpectral(emis_vector, extinct_matrix,
+                    //scatlayers,
+                                    scat_data_spectral, scat_za_grid, f_index,
+                                    pnd_field,
+                                    t_field(Range(0, num_layers + 1), joker, joker),
+                                    cloudbox_limits, stokes_dim);
           }
-          else
-          {
-            par_optpropCalcSpectral( emis_vector, extinct_matrix,
-                             //scatlayers,
-                             scat_data_spectral, scat_za_grid, f_index,
-                             pnd_field,
-                             t_field(Range(0,num_layers+1),joker,joker),
-                             cloudbox_limits, stokes_dim );
-          }
-          sca_optpropCalcSpectral( scatter_matrix, pfct_failed,
-                           emis_vector(0,joker,joker,joker,joker),
-                           extinct_matrix(0,joker,joker,joker,joker,joker),
-                           f_index, scat_data_spectral, pnd_field, stokes_dim,
-                           scat_za_grid, quad_weights,
-                           pfct_method, pfct_aa_grid_size, pfct_threshold,
-                           auto_inc_nstreams,t_field(Range(0,num_layers+1),joker,joker),
-                           cloudbox_limits,verbosity );
+          sca_optpropCalcSpectral(scatter_matrix, pfct_failed,
+                                  emis_vector(0, joker, joker, joker, joker),
+                                  extinct_matrix(0, joker, joker, joker, joker, joker),
+                                  f_index, scat_data_spectral, pnd_field, stokes_dim,
+                                  scat_za_grid, quad_weights,
+                                  pfct_method, pfct_aa_grid_size, pfct_threshold,
+                                  auto_inc_nstreams, t_field(Range(0, num_layers + 1), joker, joker),
+                                  cloudbox_limits, verbosity);
         }
         else
         {
           pfct_failed = 1;
         }
       }
-  }
-  cout << "I am in run_rt4_spectral now! \n";
+
+      if (!pfct_failed)
+      {
+#pragma omp critical(fortran_rt4)
+            {
+                // Call RT4
+                radtrano_(
+                        stokes_dim,
+                        nummu,
+                        nhza,
+                        max_delta_tau,
+                        quad_type.c_str(),
+                        surface_skin_t,
+                        ground_type.c_str(),
+                        ground_albedo[f_index],
+                        ground_index[f_index],
+                        groundreflec.get_c_array(),
+                        surfreflmat.get_c_array(),
+                        surfemisvec.get_c_array(),
+                        sky_temp,
+                        wavelength,
+                        num_layers,
+                        height.get_c_array(),
+                        temperatures.get_c_array(),
+                        gas_extinct.get_c_array(),
+                        num_scatlayers,
+                        scatlayers.get_c_array(),
+                        extinct_matrix.get_c_array(),
+                        emis_vector.get_c_array(),
+                        scatter_matrix.get_c_array(),
+                        //noutlevels,
+                        //outlevels.get_c_array(),
+                        mu_values.get_c_array(),
+                        up_rad.get_c_array(),
+                        down_rad.get_c_array()
+                            );
+            }
+        }
+        else // if (auto_inc_nstreams)
+        {
+            if (nummu_new<nummu)
+                nummu_new = nummu+1;
+
+            Index nhstreams_new;
+            Vector mu_values_new, quad_weights_new, scat_aa_grid_new;
+            Tensor6 scatter_matrix_new;
+            Tensor6 extinct_matrix_new;
+            Tensor5 emis_vector_new;
+            Tensor4 surfreflmat_new;
+            Matrix surfemisvec_new;
+
+            while (pfct_failed && (2*nummu_new)<=auto_inc_nstreams)
+            {
+                // resize and recalc nstream-affected/determined variables:
+                //   - mu_values, quad_weights (resize & recalc)
+                nhstreams_new = nummu_new-nhza;
+                mu_values_new.resize(nummu_new);
+                mu_values_new=0.;
+                quad_weights_new.resize(nummu_new);
+                quad_weights_new=0.;
+                get_quad_angles( mu_values_new, quad_weights_new,
+                                 scat_za_grid, scat_aa_grid_new,
+                                 quad_type, nhstreams_new, nhza, nummu_new );
+
+                //   - resize & recalculate emis_vector, extinct_matrix (as input to scatter_matrix calc)
+                extinct_matrix_new.resize(1,num_scatlayers,2,nummu_new,stokes_dim,stokes_dim);
+                extinct_matrix_new = 0.;
+                emis_vector_new.resize(1,num_scatlayers,2,nummu_new,stokes_dim);
+                emis_vector_new = 0.;
+                // FIXME: So far, outside-of-freq-loop calculated optprops will fall
+                // back to in-loop-calculated ones in case of auto-increasing stream
+                // numbers. There might be better options, but I (JM) couldn't come up
+                // with or decide for one so far (we could recalc over all freqs. but
+                // that would unnecessarily recalc lower-freq optprops, too, which are
+                // not needed anymore. which could likely take more time than we
+                // potentially safe through all-at-once temperature and direction
+                // interpolations.
+                par_optpropCalcSpectral( emis_vector_new, extinct_matrix_new,
+                        //scatlayers,
+                                  scat_data_spectral, scat_za_grid, f_index,
+                                  pnd_field,
+                                  t_field(Range(0,num_layers+1),joker,joker),
+                                  cloudbox_limits, stokes_dim );
+
+                //   - resize & recalc scatter_matrix
+                scatter_matrix_new.resize(num_scatlayers,4,nummu_new,stokes_dim,nummu_new,stokes_dim);
+                scatter_matrix_new = 0.;
+                pfct_failed = 0;
+                sca_optpropCalcSpectral( scatter_matrix_new, pfct_failed,
+                                 emis_vector_new(0,joker,joker,joker,joker),
+                                 extinct_matrix_new(0,joker,joker,joker,joker,joker),
+                                 f_index, scat_data_spectral, pnd_field, stokes_dim,
+                                 scat_za_grid, quad_weights_new,
+                                 pfct_method, pfct_aa_grid_size, pfct_threshold,
+                                 auto_inc_nstreams, t_field(Range(0,num_layers+1),joker,joker),
+                                 cloudbox_limits,verbosity );
+
+                if (pfct_failed)
+                    nummu_new = nummu_new+1;
+            }
+
+            if (pfct_failed)
+            {
+                nummu_new = nummu_new-1;
+                ostringstream os;
+                os << "Could not increase nstreams sufficiently (current: "
+                   << 2*nummu_new << ")\n"
+                   << "to satisfy scattering matrix norm at f[" << f_index
+                   << "]=" << f_grid[f_index]*1e-9 << " GHz.\n";
+                if (!robust)
+                {
+                    // couldn't find a nstreams within the limits of auto_inc_nstremas
+                    // (aka max. nstreams) that satisfies the scattering matrix norm.
+                    // Hence fail completely.
+                    os << "Try higher maximum number of allowed streams (ie. higher"
+                       << " auto_inc_nstreams than " << auto_inc_nstreams << ").";
+                    throw runtime_error( os.str() );
+                }
+                else
+                {
+                    CREATE_OUT1;
+                    os << "Continuing with nstreams=" << 2*nummu_new
+                       << ". Output for this frequency might be erroneous.";
+                    out1 << os.str();
+                    pfct_failed = -1;
+                    sca_optpropCalcSpectral( scatter_matrix_new, pfct_failed,
+                                     emis_vector_new(0,joker,joker,joker,joker),
+                                     extinct_matrix_new(0,joker,joker,joker,joker,joker),
+                                     f_index, scat_data_spectral, pnd_field, stokes_dim,
+                                     scat_za_grid, quad_weights_new,
+                                     pfct_method, pfct_aa_grid_size, pfct_threshold,
+                                     0, t_field(Range(0,num_layers+1),joker,joker),
+                                     cloudbox_limits,verbosity );
+                }
+            }
+
+            // resize and calc remaining nstream-affected variables:
+            //   - in case of surface_rtprop_agenda driven surface: surfreflmat, surfemisvec
+            if (ground_type=="A") // surface_rtprop_agenda driven surface
+            {
+                Tensor5 srm_new(1,nummu_new,stokes_dim,nummu_new,stokes_dim, 0.);
+                Tensor3 sev_new(1,nummu_new,stokes_dim, 0.);
+                surf_optpropCalc( ws, srm_new, sev_new,
+                                  surface_rtprop_agenda,
+                                  f_grid[Range(f_index,1)],
+                                  scat_za_grid, mu_values_new,
+                                  quad_weights_new, stokes_dim,
+                                  surf_altitude );
+                surfreflmat_new=srm_new(0,joker,joker,joker,joker);
+                surfemisvec_new=sev_new(0,joker,joker);
+            }
+            //   - up/down_rad (resize only)
+            Tensor3 up_rad_new(num_layers+1,nummu_new,stokes_dim, 0.);
+            Tensor3 down_rad_new(num_layers+1,nummu_new,stokes_dim, 0.);
+            //
+            // run radtrano_
+#pragma omp critical(fortran_rt4)
+              {
+                  // Call RT4
+                  radtrano_(
+                          stokes_dim,
+                          nummu_new,
+                          nhza,
+                          max_delta_tau,
+                          quad_type.c_str(),
+                          surface_skin_t,
+                          ground_type.c_str(),
+                          ground_albedo[f_index],
+                          ground_index[f_index],
+                          groundreflec.get_c_array(),
+                          surfreflmat_new.get_c_array(),
+                          surfemisvec_new.get_c_array(),
+                          sky_temp,
+                          wavelength,
+                          num_layers,
+                          height.get_c_array(),
+                          temperatures.get_c_array(),
+                          gas_extinct.get_c_array(),
+                          num_scatlayers,
+                          scatlayers.get_c_array(),
+                          extinct_matrix_new(0,joker,joker,joker,joker,joker).get_c_array(),
+                          emis_vector_new(0,joker,joker,joker,joker).get_c_array(),
+                          scatter_matrix_new.get_c_array(),
+                          //noutlevels,
+                          //outlevels.get_c_array(),
+                          mu_values_new.get_c_array(),
+                          up_rad_new.get_c_array(),
+                          down_rad_new.get_c_array()
+                  );
+              }
+              // back-interpolate nstream_new fields to nstreams
+              //   (possible to use iyCloudboxInterp agenda? nja, not really a good
+              //   idea. too much overhead there (checking, 3D+2ang interpol). rather
+              //   use interp_order as additional user parameter.
+              //   extrapol issues shouldn't occur as we go from finer to coarser
+              //   angular grid)
+              //   - loop over nummu:
+              //     - determine weights per ummu ang (should be valid for both up and
+              //       down)
+              //     - loop over num_layers and stokes_dim:
+              //       - apply weights
+              for (Index j = 0; j<nummu; j++)
+              {
+                  GridPosPoly gp_za;
+                  if( cos_za_interp )
+                  {
+                      gridpos_poly( gp_za, mu_values_new,
+                                    mu_values[j], za_interp_order, 0.5 );
+                  }
+                  else
+                  {
+                      gridpos_poly( gp_za, scat_za_grid[Range(0,nummu_new)],
+                                    scat_za_grid_orig[j], za_interp_order, 0.5 );
+                  }
+                  Vector itw(gp_za.idx.nelem());
+                  interpweights( itw, gp_za );
+
+                  for (Index k = 0; k<num_layers+1; k++)
+                      for (Index ist = 0; ist<stokes_dim; ist++ )
+                      {
+                          up_rad(k,j,ist) = interp(itw, up_rad_new(k,joker,ist), gp_za);
+                          down_rad(k,j,ist) = interp(itw, down_rad_new(k,joker,ist), gp_za);
+                      }
+              }
+
+              // reconstruct scat_za_grid
+              scat_za_grid = scat_za_grid_orig;
+          }
+
+
+          // RT4 rad output is in wavelength units, nominally in W/(m2 sr um), where
+          // wavelength input is required in um.
+          // FIXME: When using wavelength input in m, output should be in W/(m2 sr
+          // m). However, check this. So, at first we use wavelength in um. Then
+          // change and compare.
+          //
+          // FIXME: if ever we allow the cloudbox to be not directly at the surface
+          // (at atm level #0, respectively), the assigning from up/down_rad to
+          // doit_i_field needs to checked. there seems some offsetting going on
+          // (test example: TestDOIT.arts. if kept like below, doit_i_field at
+          // top-of-cloudbox seems to actually be from somewhere within the
+          // cloud(box) indicated by downwelling being to high and downwelling
+          // exhibiting a non-zero polarisation signature (which it wouldn't with
+          // only scalar gas abs above).
+          //
+          Numeric rad_l2f = wavelength/f_grid[f_index];
+          // down/up_rad contain the radiances in order from slant (90deg) to steep
+          // (0 and 180deg, respectively) streams,then the possible extra angle(s).
+          // We need to resort them properly into doit_i_field, such that order is
+          // from 0 to 180deg.
+          for(Index j = 0; j<nummu; j++)
+              for(Index k = 0; k<(cloudbox_limits[1]-cloudbox_limits[0]+1); k++)
+                  for (Index ist = 0; ist<stokes_dim; ist++ )
+                  {
+                      //doit_i_field(f_index, k, 0, 0, nummu+j, 0, ist) =
+                      //  up_rad(num_layers-k,j,ist)*rad_l2f;
+                      //doit_i_field(f_index, k, 0, 0, nummu-1-j, 0, ist) =
+                      //  down_rad(num_layers-k,j,ist)*rad_l2f;
+                      doit_i_field(f_index, k, 0, 0, nummu+j, 0, ist) =
+                              up_rad(num_layers-k,j,ist)*rad_l2f;
+                      doit_i_field(f_index, k, 0, 0, nummu-1-j, 0, ist) =
+                              down_rad(num_layers-k,j,ist)*rad_l2f;
+                  }
+      }
 }
 
 //! scat_za_grid_adjust
@@ -2860,25 +3117,175 @@ void sca_optpropCalcSpectral( //Output
   ArrayOfIndex ptype_ssbulk;
   Tensor6 pha_mat_real_bulk;
   Tensor6 pha_mat_imag_bulk;
+  Tensor6 sca_mat(1,Np_cloud,nza_rt,nza_rt,stokes_dim,stokes_dim);
   Index ptype_bulk;
   bool any_m_inc;
   bool any_m_sca;
+
   pha_mat_NScatElemsSpectral(pha_mat_real_Nse,pha_mat_imag_Nse,ptypes_Nse,t_ok,
                              any_m_inc,any_m_sca,
                              scat_data_spectral,stokes_dim, T_array,f_index);
+
   pha_mat_ScatSpecBulk(pha_mat_real_ssbulk,ptype_ssbulk,pha_mat_real_Nse,ptypes_Nse,
                        pnd_field(joker, joker, 0, 0), t_ok);
   pha_mat_ScatSpecBulk(pha_mat_imag_ssbulk,ptype_ssbulk,pha_mat_imag_Nse,ptypes_Nse,
                          pnd_field(joker, joker, 0, 0), t_ok);
+
   pha_mat_Bulk(pha_mat_real_bulk,ptype_bulk,pha_mat_real_ssbulk,ptype_ssbulk);
   pha_mat_Bulk(pha_mat_imag_bulk,ptype_bulk,pha_mat_imag_ssbulk,ptype_ssbulk);
+  pha_mat_SpecToGrid(sca_mat, pha_mat_real_bulk, pha_mat_imag_bulk,
+          dir_array,dir_array, ptype_bulk, any_m_inc,any_m_sca);
 
 
+  Index nummu = nza_rt/2;
+  for (Index pind = 0;
+       pind < Np_cloud-1;
+       pind ++)
+  {
+    for (Index iza = 0; iza < nummu; iza++)
+    {
+      // JM171003: not clear to me anymore why this check. if pnd_mean
+      // is non-zero, then extinction should also be non-zero by
+      // default?
+      //if ( (extinct_matrix(scat_p_index_local,0,iza,0,0)+
+      //      extinct_matrix(scat_p_index_local,1,iza,0,0)) > 0. )
+      for (Index sza = 0; sza < nummu; sza++) {
+        for (Index ist1 = 0; ist1 < stokes_dim; ist1++)
+          for (Index ist2 = 0; ist2 < stokes_dim; ist2++) {
+            // we can't use stokes_dim jokers here since '*' doesn't
+            // exist for Num*MatView. Also, order of stokes matrix
+            // dimensions is inverted here (aka scat matrix is
+            // transposed).
+            scatter_matrix(pind, 0, iza, ist2, sza, ist1) +=
+                    0.5 * (sca_mat(0,pind, iza, sza, ist1, ist2) +
+                            sca_mat(0,pind+1, iza, sza, ist1, ist2));
+            scatter_matrix(pind, 1, iza, ist2, sza, ist1) +=
+                    0.5 * (sca_mat(0,pind, nummu + iza, sza, ist1, ist2) +
+                            sca_mat(0,pind+1, nummu + iza, sza, ist1, ist2));
+            scatter_matrix(pind, 2, iza, ist2, sza, ist1) +=
+                    0.5 * (sca_mat(0,pind, iza, nummu + sza, ist1, ist2) +
+                            sca_mat(0,pind+1, iza, nummu + sza, ist1, ist2));
+            scatter_matrix(pind, 3, iza, ist2, sza, ist1) +=
+                    0.5 * (sca_mat(0,pind, nummu + iza, nummu + sza, ist1, ist2) +
+                            sca_mat(0,pind+1, nummu + iza, nummu + sza, ist1, ist2));
+          }
+      }
+    }
+    for (Index iza=0; iza<nummu; iza++)
+    {
+      for (Index ih=0; ih<2; ih++)
+      {
+        if ( extinct_matrix(pind,ih,iza,0,0) > 0. )
+        {
+          Numeric sca_mat_integ = 0.;
 
+          // We need to calculate the nominal values for the fixed T, we
+          // used above in the pha_mat extraction. Only this tells us whether
+          // angular resolution is sufficient.
+          //
+          //Numeric ext_nom = extinct_matrix(scat_p_index_local,ih,iza,0,0);
+          //Numeric sca_nom = ext_nom-emis_vector(scat_p_index_local,ih,iza,0);
+          Numeric ext_nom = extinct_matrix(pind,ih,iza,0,0);
+          Numeric sca_nom = ext_nom - emis_vector(pind,ih,iza,0);
+          Numeric w0_nom = sca_nom/ext_nom;
+          assert( w0_nom>=0. );
 
+          for (Index sza=0; sza<nummu; sza++)
+          {
+//                SUM2 = SUM2 + 2.0D0*PI*QUAD_WEIGHTS(J2)*
+//     .                 ( SCATTER_MATRIX(1,J2,1,J1, L,TSL)
+//     .                 + SCATTER_MATRIX(1,J2,1,J1, L+2,TSL) )
+            sca_mat_integ += quad_weights[sza] *
+                             ( scatter_matrix(pind,ih,iza,0,sza,0)+
+                               scatter_matrix(pind,ih+2,iza,0,sza,0) );
+          }
 
-    // TODO WORK BITCH.
-  cout << "I am lazy!!! \n";
+          // compare integrated scatt matrix with ext-abs for respective
+          // incident polar angle - consistently with scat_dataCheck, we do
+          // this in terms of albedo deviation (since PFCT deviations at
+          // small albedos matter less than those at high albedos)
+//            SUM1 = EMIS_VECTOR(1,J1,L,TSL)-EXTINCT_MATRIX(1,1,J1,L,TSL)
+          Numeric w0_act = 2.*PI*sca_mat_integ / ext_nom;
+          Numeric pfct_norm = 2.*PI*sca_mat_integ / sca_nom;
+          /*
+          cout << "sca_mat norm deviates " << 1e2*abs(1.-pfct_norm) << "%"
+               << " (" << abs(w0_act-w0_nom) << " in albedo).\n";
+          */
+          Numeric sca_nom_paropt =
+                  extinct_matrix(pind,ih,iza,0,0) -
+                  emis_vector(pind,ih,iza,0);
+          //Numeric w0_nom_paropt = sca_nom_paropt /
+          //  extinct_matrix(scat_p_index_local,ih,iza,0,0);
+          /*
+          cout << "scat_p=" << scat_p_index_local
+               << ", iza=" << iza << ", hem=" << ih << "\n";
+          cout << "  scaopt (paropt) w0_act= " << w0_act
+               << ", w0_nom = " << w0_nom
+               << " (" << w0_nom_paropt
+               << "), diff=" << w0_act-w0_nom
+               << " (" << w0_nom-w0_nom_paropt << ").\n";
+          */
+
+          if (abs(w0_act-w0_nom) > pfct_threshold)
+          {
+            if (pfct_failed>=0)
+            {
+              if (auto_inc_nstreams)
+              {
+                pfct_failed = 1;
+                return;
+              }
+              else
+              {
+                ostringstream os;
+                os << "Bulk scattering matrix normalization deviates significantly\n"
+                   << "from expected value (" << 1e2*abs(1.-pfct_norm) << "%,"
+                   << " resulting in albedo deviation of " << abs(w0_act-w0_nom)
+                   << ").\n"
+                   << "Something seems wrong with your scattering data "
+                   << " (did you run *scat_dataCheck*?)\n"
+                   << "or your RT4 setup (try increasing *nstreams* and in case"
+                   << " of randomly oriented particles possibly also"
+                   << " pfct_aa_grid_size).";
+                throw runtime_error( os.str() );
+              }
+            }
+          }
+          else if (abs(w0_act-w0_nom) > pfct_threshold*0.1 ||
+                   abs(1.-pfct_norm) > 1e-2)
+          {
+            CREATE_OUT2;
+            out2 << "Warning: The bulk scattering matrix is not well normalized\n"
+                 << "Deviating from expected value by " << 1e2*abs(1.-pfct_norm)
+                 << "% (and " << abs(w0_act-w0_nom)
+                 << " in terms of scattering albedo).\n";
+          }
+          // rescale scattering matrix to expected (0,0) value (and scale all
+          // other elements accordingly)
+          //
+          // However, here we should not use the pfct_norm based on the
+          // deviation from the fixed-temperature ext and abs. Instead, for
+          // energy conservation reasons, this needs to be consistent with
+          // extinct_matrix and emis_vector. Hence, recalculate pfct_norm
+          // from them.
+          //cout << "  scaopt (paropt) pfct_norm dev = " << 1e2*pfct_norm-1e2;
+          pfct_norm = 2.*PI*sca_mat_integ / sca_nom_paropt;
+          //cout << " (" << 1e2*pfct_norm-1e2 << ")%.\n";
+          //
+          // FIXME: not fully clear whether applying the same rescaling
+          // factor to all stokes elements is the correct way to do. check
+          // out, e.g., Vasilieva (JQSRT 2006) for better approaches.
+          // FIXME: rather rescale Z(0,0) only as we should have less issues
+          // for other Z elements as they are less peaked/featured.
+          scatter_matrix(pind,ih,iza,joker,joker,joker) /=
+                  pfct_norm;
+          scatter_matrix(pind,ih+2,iza,joker,joker,joker) /=
+                  pfct_norm;
+          //if (scat_p_index_local==49)
+        }
+      }
+    }
+  }
 }
 
 //! surf_optpropCalc

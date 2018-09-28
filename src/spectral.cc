@@ -100,6 +100,7 @@ void opt_prop_SpecToGrid(//Output
                 const Matrix& dir_array,
                 const bool& any_m) {
   // Initialize gridded fields
+  //cout << abs_vector_spectral(1,0,joker,0) << "\n";
   ext_matrix = 0.;
   abs_vector = 0.;
   shtns_cfg shtns;                // handle to a sht transform configuration
@@ -191,6 +192,12 @@ void pha_mat_SpecToGrid(//Output
         const bool& any_m_inc,
         const bool& any_m_sca)
 {
+  //if (pha_mat_real_spectral(0,0,0,0,0,0) == 0)
+  //{
+  //  ostringstream os;
+  //  os << "Looks like you have all zeros in your data....dumbass!";
+  //  throw runtime_error( os.str() );
+  //}
   // Initialize gridded fields
   pha_matrix = 0.;
   shtns_cfg shtns_inc, shtns_sca;                // handle to a sht transform configuration
@@ -230,6 +237,9 @@ void pha_mat_SpecToGrid(//Output
   const Index npDir = pdir_array.nrows();
   assert( pha_matrix.nbooks() == npDir );
 
+  const Index stokes_dim = pha_matrix.ncols();
+  assert( pha_matrix.nrows() == stokes_dim );
+
   const Index niDir = idir_array.nrows();
   assert( pha_matrix.npages() == niDir );
 
@@ -260,12 +270,14 @@ void pha_mat_SpecToGrid(//Output
                   for (Index i_lm = 0; i_lm < NLM_inc; i_lm++)
                   {
                     // First spectral transformation (incoming anlges)
-                    Qlm_inc[i_lm] = (complex<double>) pha_mat_real_spectral(
+                    Qlm_inc[i_lm] = complex<double>(pha_mat_real_spectral(
                             find, Tind, p_lm, i_lm, st1, st2)
-                                    + pha_mat_imag_spectral(
-                            find, Tind, p_lm, i_lm, st1, st2) * sqrt(-1);
+                                    ,pha_mat_imag_spectral(
+                            find, Tind, p_lm, i_lm, st1, st2));
                   }
-                  // Here the first trafo happens
+                  // Here the first trafo happens. We can take the angle
+                  // theta=0, phi=0 since there is no incident angle
+                  // dependence for totally random particles
                   Qlm_sca[p_lm] = SH_to_point(shtns_inc,Qlm_inc,
                             0,0);
                 }
@@ -284,16 +296,74 @@ void pha_mat_SpecToGrid(//Output
   } // FIXME: IS IT RIGHT LIKE THIS???                                                                                                                                                                                                                                                                                                           
   else // ptype azi random (and general)
   {
-    Index nDir=npDir*niDir;
-    Matrix delta_aa(npDir,niDir);
+    Index nDir = npDir * niDir;
+    Matrix delta_aa(npDir, niDir);
 
-    for( Index pdir=0; pdir<npDir; pdir++ )
+    for (Index pdir = 0; pdir < npDir; pdir++)
     {
       for (Index idir = 0; idir < niDir; idir++)
       {
         delta_aa(pdir, idir) = pdir_array(pdir, 1) - idir_array(idir, 1) +
                                (pdir_array(pdir, 1) - idir_array(idir, 1) < -180) * 360 -
                                (pdir_array(pdir, 1) - idir_array(idir, 1) > 180) * 360;
+      }
+    }
+    for (Index find = 0; find < nf; find++)
+    {
+      for (Index Tind = 0; Tind < nT; Tind++)
+      {
+        for (Index pdir = 0; pdir < npDir; pdir++)
+        {
+          for (Index idir = 0; idir < niDir; idir++)
+          {
+            for (Index st1 = 0; st1 < pha_matrix.nrows(); st1++)
+            {
+              for (Index st2 = 0; st2 < pha_matrix.ncols(); st2++)
+              {
+                for (Index p_lm = 0; p_lm < NLM_sca; p_lm++)
+                {
+                  for (Index i_lm = 0; i_lm < NLM_inc; i_lm++)
+                  {
+                    // First spectral transformation (incoming angles)
+                    Qlm_inc[i_lm] = complex<double>(pha_mat_real_spectral(
+                                     find, Tind, p_lm, i_lm, st1, st2)
+                                          ,pha_mat_imag_spectral(
+                                     find, Tind, p_lm, i_lm, st1, st2));
+                  }
+                  // Here the first trafo happens. We can take the angle
+                  // theta=0, phi=0 since there is no incident angle
+                  // dependence for totally random particles
+                  Qlm_sca[p_lm] = SH_to_point(shtns_inc, Qlm_inc,
+                                              cos(idir_array(idir, 0)),
+                                              idir_array(idir, 1));
+                }
+                pha_matrix(find, Tind, pdir, idir, st1, st2) =
+                          SH_to_point(shtns_sca, Qlm_sca, cos(pdir_array(pdir, 0)),
+                                       pdir_array(pdir, 1));
+              }
+            }
+            if( stokes_dim>2 )
+            {
+              if (delta_aa(pdir, idir) < 0.)
+              {
+                pha_matrix(find, joker, pdir, idir, 0, 2) *= -1;
+                pha_matrix(find, joker, pdir, idir, 1, 2) *= -1;
+                pha_matrix(find, joker, pdir, idir, 2, 0) *= -1;
+                pha_matrix(find, joker, pdir, idir, 2, 1) *= -1;
+              }
+            }
+            if( stokes_dim>3 )
+            {
+              if( delta_aa(pdir,idir)<0. )
+              {
+                pha_matrix(find,joker,pdir,idir,0,3) *= -1;
+                pha_matrix(find,joker,pdir,idir,1,3) *= -1;
+                pha_matrix(find,joker,pdir,idir,3,0) *= -1;
+                pha_matrix(find,joker,pdir,idir,3,1) *= -1;
+              }
+            }
+          }
+        }
       }
     }
   }

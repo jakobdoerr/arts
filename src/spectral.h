@@ -55,5 +55,6 @@ void pha_mat_SpecToGrid(//Output
         const Tensor6& pha_mat_imag_spectral,
         const Matrix& pdir_array,
         const Matrix& idir_array,
+        const Index& ptype,
         const bool& any_m_inc,
         const bool& any_m_sca);

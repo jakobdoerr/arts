@@ -279,6 +279,8 @@ void RT4CalcSpectral( Workspace& ws,
 
   scat_za_grid_adjust( scat_za_grid, mu_values, nummu );
 }
+
+
 /* Workspace method: Doxygen documentation will be auto-generated */
 void RT4CalcWithRT4Surface(
                 Workspace& ws,
