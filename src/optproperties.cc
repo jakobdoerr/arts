@@ -1260,7 +1260,7 @@ void pha_mat_NScatElemsSpectral(//Output
   // Calculate the maximum number of coefficients for the INCIDENT DIRECTION
   // Here we deal with transformed complex data, because the coefficients
   // form the first transformation are complex!
-  any_m_inc = (max_m_inc > 0);
+  any_m_inc = (max_m_inc > 0) && any_m_inc;
   // Check (either here or elsewhere) that mmax is either
   // lmax or 0!
   assert(!max_m_inc || max_l_inc == max_m_inc);
@@ -1275,7 +1275,7 @@ void pha_mat_NScatElemsSpectral(//Output
     max_nlm_inc = max_l_inc + 1;
   }
   // Calculate the maximum number of coefficients for the SCATTERED DIRECTION
-  any_m_sca = (max_m_sca > 0);
+  any_m_sca = (max_m_sca > 0) && any_m_sca;
   // Check (either here or elsewhere) that mmax is either
   // lmax or 0!
   assert(!max_m_sca || max_l_sca == max_m_sca);
@@ -1288,6 +1288,7 @@ void pha_mat_NScatElemsSpectral(//Output
   else
   {
     max_nlm_sca = max_l_sca + 1;
+    max_m_sca = 0;
   }
   // Calculate temperature interpolated phase matrix for every particle element
   // and size and then map the coefficients to the highest coefficients, to be
@@ -1305,17 +1306,26 @@ void pha_mat_NScatElemsSpectral(//Output
         max_l_inc_local = (Index) max(scat_data_spectral[i_ss][i_se].coeff_inc(0,joker));
         max_m_inc_local = (Index) max(scat_data_spectral[i_ss][i_se].coeff_inc(1,joker));
         max_l_sca_local = (Index) max(scat_data_spectral[i_ss][i_se].coeff_sca(0,joker));
-        max_m_sca_local = (Index) max(scat_data_spectral[i_ss][i_se].coeff_sca(1,joker));
+
+
+        if (any_m_sca)
+        {
+          max_m_sca_local = (Index) max(scat_data_spectral[i_ss][i_se].coeff_sca(1,joker));
+        }
+        else
+        {
+          max_m_sca_local = 0;
+        }
 
         // The number of coefficients in the phase matrix does not equal the
         // number of coefficients in coeff_inc, b\c the phase matrix is transformed
         // over complex data (the coefficients from the first transformation)
         // The number of coefficients needed for the incident direction is
         // calculated here
-        if (max_m_inc_local > 0)
+        if (max_m_inc_local > 0 && any_m_inc)
           nCoeff_inc = (Index) (max_l_inc_local + 1) * (max_l_inc_local + 1);
         else
-          nCoeff_inc = max_l_inc + 1;
+          nCoeff_inc = max_l_inc_local + 1;
 
         pha_mat_real_temp.resize(nf, nT, nCoeff_sca, nCoeff_inc, stokes_dim, stokes_dim);
         pha_mat_imag_temp.resize(nf, nT, nCoeff_sca, nCoeff_inc, stokes_dim, stokes_dim);
@@ -1329,31 +1339,30 @@ void pha_mat_NScatElemsSpectral(//Output
                                         stokes_dim, stokes_dim);
         pha_mat_imag[i_ss][i_se].resize(nf, nT, max_nlm_sca, max_nlm_inc,
                                           stokes_dim, stokes_dim);
-        // INCOMING (complex data coefficient mapping)
+        pha_mat_real[i_ss][i_se] = 0.;
+        pha_mat_imag[i_ss][i_se] = 0.;
+
+          // INCOMING (complex data coefficient mapping)
         //          here we dont need to do complicated mapping b\c higher indices are
         //          coming at the end.
         // FIXME: Am I doing this right? What if the maximum coefficients array has
         // m, but the local does not??
-        for (Index local_idx = 0; local_idx<nCoeff_inc; local_idx++)
+        for (Index local_idx_inc = 0; local_idx_inc<nCoeff_inc; local_idx_inc++)
         {
-            pha_mat_real[i_ss][i_se](joker,joker,joker,local_idx,joker,joker)
-                    = pha_mat_real_temp(joker,joker,joker,local_idx,joker,joker);
-            pha_mat_imag[i_ss][i_se](joker,joker,joker,local_idx,joker,joker)
-                    = pha_mat_imag_temp(joker,joker,joker,local_idx,joker,joker);
-        }
-        // SCATTERED (real data coefficient mapping)
-        //           here we need some more complicated mapping b\c higher indices
-        //           are sorted in between the existing indices
-        for (Index l = 0; l<max_l_sca_local + 1; l++)
-        {
-          for (Index m = 0; m<max_m_sca_local + 1; m++)
-          {
-            Index local_idx = (Index) max_l_sca_local*m - (m-1)*m/2 + l;
-            Index global_idx = (Index) max_l_sca*m - (m-1)*m/2 + l;
-            pha_mat_real[i_ss][i_se](joker,joker,global_idx,joker,joker,joker)
-                    = pha_mat_real_temp(joker,joker,local_idx,joker,joker,joker);
-            pha_mat_imag[i_ss][i_se](joker,joker,global_idx,joker,joker,joker)
-                    = pha_mat_imag_temp(joker,joker,local_idx,joker,joker,joker);
+          // SCATTERED (real data coefficient mapping)
+          //           here we need some more complicated mapping b\c higher indices
+          //           are sorted in between the existing indices
+          for (Index l = 0; l < max_l_sca_local + 1; l++) {
+            for (Index m = 0; m < max_m_sca_local + 1; m++) {
+              Index local_idx_sca = (Index) max_l_sca_local * m - (m - 1) * m / 2 + l;
+              Index global_idx = (Index) max_l_sca * m - (m - 1) * m / 2 + l;
+
+              // Apply indices
+              pha_mat_real[i_ss][i_se](joker, joker, global_idx, local_idx_inc, joker, joker)
+                      = pha_mat_real_temp(joker, joker, local_idx_sca, local_idx_inc, joker, joker);
+              pha_mat_imag[i_ss][i_se](joker, joker, global_idx, local_idx_inc, joker, joker)
+                      = pha_mat_imag_temp(joker, joker, local_idx_sca, local_idx_inc, joker, joker);
+            }
           }
         }
         i_se_flat++;
@@ -1793,7 +1802,7 @@ void pha_mat_1ScatElemSpectral(//Output
 
     for( Index find=0; find<nf; find++ )
     {
-      for (Index dinc = 0; dinc < nCoeff_sca; dinc++)
+      for (Index dinc = 0; dinc < nCoeff_inc; dinc++)
       {
         for (Index dsca = 0; dsca < nCoeff_sca; dsca++)
         {

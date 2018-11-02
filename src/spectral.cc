@@ -192,6 +192,7 @@ void pha_mat_SpecToGrid(//Output
         const bool& any_m_inc,
         const bool& any_m_sca)
 {
+  cout << "Now I enter!" << "\n";
   //if (pha_mat_real_spectral(0,0,0,0,0,0) == 0)
   //{
   //  ostringstream os;
@@ -202,25 +203,46 @@ void pha_mat_SpecToGrid(//Output
   pha_matrix = 0.;
   shtns_cfg shtns_inc, shtns_sca;                // handle to a sht transform configuration
   complex<double> *Qlm_inc, *Qlm_sca;      // spherical harmonics coefficients (l,m space): complex numbers.
-  int lmax_inc = (int) pha_mat_real_spectral.npages() - 1;
-  int lmax_sca = (int) pha_mat_real_spectral.nbooks() - 1;
-  int nlat = 32;
-  int nphi = 10;
-  int mres = 1;
-  int mmax_inc,mmax_sca,NLM_inc, NLM_sca;
-  if (any_m_inc)
-    mmax_inc = lmax_inc;
-  else
-    mmax_inc = 0;
-  if (any_m_sca)
-    mmax_sca = lmax_sca;
-  else
-    mmax_sca = 0;
 
+  int mmax_inc, mmax_sca, lmax_inc, lmax_sca, NLM_inc, NLM_sca;
+  // Calculate the number of l and m for incoming and scattered directions from the data
+
+  int ncoeff_inc = (int) pha_mat_real_spectral.npages();
+  int ncoeff_sca = (int) pha_mat_real_spectral.nbooks();
+
+  // Incoming
+  if (any_m_sca)
+  {
+    lmax_sca = (int) (- 1.5 + sqrt(0.25 + 2 * ncoeff_sca));  // See doc.
+    mmax_sca = lmax_sca;
+  }
+  else
+  {
+    lmax_sca = ncoeff_sca - 1;
+    mmax_sca = 0;
+  }
+
+  // Scattered
+  if (any_m_inc)
+  {
+    lmax_inc = (int) sqrt(ncoeff_inc) - 1;
+    mmax_inc = lmax_inc;
+  }
+  else
+  {
+    lmax_inc = ncoeff_inc - 1;
+    mmax_inc = 0;
+  }
+
+  int nlat_inc = lmax_inc + 2 + lmax_inc%2; // Nlat has to be bigger than lmax
+  int nlat_sca = lmax_sca + 2 + lmax_sca%2;
+  int nphi_inc = 2*mmax_inc + 2 + mmax_inc%2; // NPhi has to be bigger than 2*mmax
+  int nphi_sca = 2*mmax_sca + 2 + mmax_sca%2;
+  int mres = 1;
   shtns_verbose(0);                       // displays informations during initialization.
   shtns_use_threads(0);           // enable multi-threaded transforms (if supported).
-  shtns_inc = shtns_init(sht_gauss, lmax_inc, mmax_inc, mres, nlat, nphi);
-  shtns_sca = shtns_init(sht_gauss, lmax_sca, mmax_sca, mres, nlat, nphi);
+  shtns_inc = shtns_init(sht_gauss, lmax_inc, mmax_inc, mres, nlat_inc, nphi_inc);
+  shtns_sca = shtns_init(sht_gauss, lmax_sca, mmax_sca, mres, nlat_sca, nphi_sca);
 
   //shtns = shtns_create(lmax, mmax, mres, sht_orthonormal | SHT_REAL_NORM);
   //shtns_set_grid(shtns, sht_gauss, 0.0, nlat, nphi);
@@ -367,6 +389,8 @@ void pha_mat_SpecToGrid(//Output
       }
     }
   }
+  cout << "Now I exit!" << "\n";
+
 }
 
 

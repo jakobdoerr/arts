@@ -3119,8 +3119,8 @@ void sca_optpropCalcSpectral( //Output
   Tensor6 pha_mat_imag_bulk;
   Tensor6 sca_mat(1,Np_cloud,nza_rt,nza_rt,stokes_dim,stokes_dim);
   Index ptype_bulk;
-  bool any_m_inc;
-  bool any_m_sca;
+  bool any_m_inc = false;
+  bool any_m_sca = false;
 
   pha_mat_NScatElemsSpectral(pha_mat_real_Nse,pha_mat_imag_Nse,ptypes_Nse,t_ok,
                              any_m_inc,any_m_sca,
@@ -3136,7 +3136,7 @@ void sca_optpropCalcSpectral( //Output
   pha_mat_SpecToGrid(sca_mat, pha_mat_real_bulk, pha_mat_imag_bulk,
           dir_array,dir_array, ptype_bulk, any_m_inc,any_m_sca);
 
-
+  cout << pha_mat_real_Nse[0][0](0,25,joker,0,0,0) << "\n";
   Index nummu = nza_rt/2;
   for (Index pind = 0;
        pind < Np_cloud-1;
