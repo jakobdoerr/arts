@@ -3136,7 +3136,7 @@ void sca_optpropCalcSpectral( //Output
   pha_mat_SpecToGrid(sca_mat, pha_mat_real_bulk, pha_mat_imag_bulk,
           dir_array,dir_array, ptype_bulk, any_m_inc,any_m_sca);
 
-  cout << pha_mat_real_Nse[0][0](0,25,joker,0,0,0) << "\n";
+  cout << pha_mat_real_Nse[0][0](0,25,joker,10,2,3) << "\n";
   Index nummu = nza_rt/2;
   for (Index pind = 0;
        pind < Np_cloud-1;

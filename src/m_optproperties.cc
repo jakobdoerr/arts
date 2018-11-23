@@ -1486,7 +1486,7 @@ void scat_data_spectralCheck( //Input:
                         for (Index t = 0; t < scat_data_spectral[i_ss][i_se].T_grid.nelem(); t++)
                         {
                             for (Index st=0; st<scat_data_spectral[i_ss][i_se].abs_vec_data_real.ncols(); st++)
-                                if( isnan(scat_data_spectral[i_ss][i_se].abs_vec_data_real(f,t,inc,st)) )
+                                if( std::isnan(scat_data_spectral[i_ss][i_se].abs_vec_data_real(f,t,inc,st)) )
                                 {
                                     ostringstream os;
                                     os << "Scatt. species #" << i_ss << " element #" << i_se
@@ -1496,7 +1496,7 @@ void scat_data_spectralCheck( //Input:
                                     throw runtime_error( os.str() );
                                 }
                             for (Index st=0; st<scat_data_spectral[i_ss][i_se].ext_mat_data_real.ncols(); st++)
-                                if( isnan(scat_data_spectral[i_ss][i_se].ext_mat_data_real(f,t,inc,st)) )
+                                if( std::isnan(scat_data_spectral[i_ss][i_se].ext_mat_data_real(f,t,inc,st)) )
                                 {
                                     ostringstream os;
                                     os << "Scatt. species #" << i_ss << " element #" << i_se
@@ -1511,7 +1511,7 @@ void scat_data_spectralCheck( //Input:
                         {
                             for (Index sca=0; sca<scat_data_spectral[i_ss][i_se].pha_mat_data_real.nshelves(); sca++)
                                     for (Index st=0; st<scat_data_spectral[i_ss][i_se].pha_mat_data_real.ncols(); st++)
-                                        if( isnan(scat_data_spectral[i_ss][i_se].pha_mat_data_real(f,t,sca,inc,st)) )
+                                        if( std::isnan(scat_data_spectral[i_ss][i_se].pha_mat_data_real(f,t,sca,inc,st)) )
                                         {
                                             ostringstream os;
                                             os << "Scatt. species #" << i_ss << " element #" << i_se
