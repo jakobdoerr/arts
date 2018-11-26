@@ -50,7 +50,7 @@
 #include <fftw3.h>
 #include <complex.h>
 
-
+extern const Numeric DEG2RAD;
 //! one-line descript
 /*!
   Descript/Doc
@@ -140,7 +140,7 @@ void opt_prop_SpecToGrid(//Output
           for (Index dind = 0; dind < dir_array.nrows(); dind++)
           {
             ext_matrix(f_index, p_index, dind, nst1, nst2) =
-                        SH_to_point(shtns, Qlm, cos(dir_array(dind, 0)), dir_array(dind, 1));
+                        SH_to_point(shtns, Qlm, cos(dir_array(dind, 0)*DEG2RAD), dir_array(dind, 1)*DEG2RAD);
           }
         }
       }
@@ -154,7 +154,7 @@ void opt_prop_SpecToGrid(//Output
         for (Index dind = 0; dind < dir_array.nrows(); dind++)
         {
           abs_vector(f_index, p_index, dind, nst1) =
-                    SH_to_point(shtns, Qlm, cos(dir_array(dind, 0)), dir_array(dind, 1));
+                    SH_to_point(shtns, Qlm, cos(dir_array(dind, 0)*DEG2RAD), dir_array(dind, 1)*DEG2RAD);
         }
       }
     }
@@ -193,6 +193,7 @@ void pha_mat_SpecToGrid(//Output
         const bool& any_m_sca)
 {
   cout << "Now I enter!" << "\n";
+  cout << pdir_array << "\n";
   //if (pha_mat_real_spectral(0,0,0,0,0,0) == 0)
   //{
   //  ostringstream os;
@@ -304,7 +305,7 @@ void pha_mat_SpecToGrid(//Output
                             0,0);
                 }
                 // Second spectral transformation (scattered angles)
-                pha_mat_int[st1*4+st2] = SH_to_point(shtns_sca,Qlm_sca,cos(theta),0);
+                pha_mat_int[st1*4+st2] = SH_to_point(shtns_sca,Qlm_sca,cos(theta*DEG2RAD),0);
               }
             }
             pha_mat_labCalc(pha_matrix(find,Tind,pdir,idir,joker,joker),pha_mat_int,
@@ -352,16 +353,14 @@ void pha_mat_SpecToGrid(//Output
                                           ,pha_mat_imag_spectral(
                                      find, Tind, p_lm, i_lm, st1, st2));
                   }
-                  // Here the first trafo happens. We can take the angle
-                  // theta=0, phi=0 since there is no incident angle
-                  // dependence for totally random particles
+                  // Here the first trafo happens.
                   Qlm_sca[p_lm] = SH_to_point(shtns_inc, Qlm_inc,
-                                              cos(idir_array(idir, 0)),
-                                              idir_array(idir, 1));
+                                              cos(idir_array(idir, 0)*DEG2RAD),
+                                              idir_array(idir, 1)*DEG2RAD);
                 }
                 pha_matrix(find, Tind, pdir, idir, st1, st2) =
-                          SH_to_point(shtns_sca, Qlm_sca, cos(pdir_array(pdir, 0)),
-                                       pdir_array(pdir, 1));
+                          SH_to_point(shtns_sca, Qlm_sca, cos(pdir_array(pdir, 0)*DEG2RAD),
+                                       pdir_array(pdir, 1)*DEG2RAD);
               }
             }
             if( stokes_dim>2 )
