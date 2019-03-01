@@ -106,7 +106,7 @@ void opt_prop_SpecToGrid(//Output
   shtns_cfg shtns;                // handle to a sht transform configuration
   complex<double> *Qlm;      // spherical harmonics coefficients (l,m space): complex numbers.
   int lmax = (int) ext_matrix_spectral.npages() - 1;
-  int nlat = 32;
+  int nlat = 40;
   int nphi = 10;
   int mres = 1;
   int mmax,NLM;
@@ -192,8 +192,6 @@ void pha_mat_SpecToGrid(//Output
         const bool& any_m_inc,
         const bool& any_m_sca)
 {
-  cout << "Now I enter!" << "\n";
-  cout << pdir_array << "\n";
   //if (pha_mat_real_spectral(0,0,0,0,0,0) == 0)
   //{
   //  ostringstream os;
@@ -388,8 +386,6 @@ void pha_mat_SpecToGrid(//Output
       }
     }
   }
-  cout << "Now I exit!" << "\n";
-
 }
 
 

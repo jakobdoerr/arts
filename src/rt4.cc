@@ -2684,7 +2684,6 @@ void sca_optpropCalc( //Output
 
   // Initialization
   scatter_matrix=0.;
-  
   const Index N_se = pnd_field.nbooks();
   const Index Np_cloud = pnd_field.npages();
   const Index nza_rt = scat_za_grid.nelem();
@@ -3136,7 +3135,6 @@ void sca_optpropCalcSpectral( //Output
   pha_mat_SpecToGrid(sca_mat, pha_mat_real_bulk, pha_mat_imag_bulk,
           dir_array,dir_array, ptype_bulk, any_m_inc,any_m_sca);
 
-  cout << pha_mat_real_Nse[0][0](0,25,joker,10,0,0) << "\n";
   Index nummu = nza_rt/2;
   for (Index pind = 0;
        pind < Np_cloud-1;
@@ -3156,18 +3154,21 @@ void sca_optpropCalcSpectral( //Output
             // exist for Num*MatView. Also, order of stokes matrix
             // dimensions is inverted here (aka scat matrix is
             // transposed).
+            // Attention: opt_prop_SpecToGrid returns the phase matrix with
+            // the scattered angles coming first, but RT4 needs the incoming
+            // angles first. Therefore, switch dimensions.
             scatter_matrix(pind, 0, iza, ist2, sza, ist1) +=
-                    0.5 * (sca_mat(0,pind, iza, sza, ist1, ist2) +
-                            sca_mat(0,pind+1, iza, sza, ist1, ist2));
+                    0.5 * (sca_mat(0,pind, sza, iza, ist1, ist2) +
+                            sca_mat(0,pind+1, sza, iza, ist1, ist2));
             scatter_matrix(pind, 1, iza, ist2, sza, ist1) +=
-                    0.5 * (sca_mat(0,pind, nummu + iza, sza, ist1, ist2) +
-                            sca_mat(0,pind+1, nummu + iza, sza, ist1, ist2));
+                    0.5 * (sca_mat(0,pind, sza, nummu + iza, ist1, ist2) +
+                            sca_mat(0,pind+1, sza, nummu + iza, ist1, ist2));
             scatter_matrix(pind, 2, iza, ist2, sza, ist1) +=
-                    0.5 * (sca_mat(0,pind, iza, nummu + sza, ist1, ist2) +
-                            sca_mat(0,pind+1, iza, nummu + sza, ist1, ist2));
+                    0.5 * (sca_mat(0,pind, nummu + sza, iza, ist1, ist2) +
+                            sca_mat(0,pind+1, nummu + sza, iza, ist1, ist2));
             scatter_matrix(pind, 3, iza, ist2, sza, ist1) +=
-                    0.5 * (sca_mat(0,pind, nummu + iza, nummu + sza, ist1, ist2) +
-                            sca_mat(0,pind+1, nummu + iza, nummu + sza, ist1, ist2));
+                    0.5 * (sca_mat(0,pind, nummu + sza, nummu + iza, ist1, ist2) +
+                            sca_mat(0,pind+1, nummu + sza, nummu + iza, ist1, ist2));
           }
       }
     }

@@ -1302,39 +1302,43 @@ void pha_mat_NScatElemsSpectral(//Output
 
     for( Index i_se=0; i_se<nse; i_se++ )
       {
-        nCoeff_sca = scat_data_spectral[i_ss][i_se].coeff_sca.ncols();
         max_l_inc_local = (Index) max(scat_data_spectral[i_ss][i_se].coeff_inc(0,joker));
-        max_m_inc_local = (Index) max(scat_data_spectral[i_ss][i_se].coeff_inc(1,joker));
         max_l_sca_local = (Index) max(scat_data_spectral[i_ss][i_se].coeff_sca(0,joker));
-
 
         if (any_m_sca)
         {
           max_m_sca_local = (Index) max(scat_data_spectral[i_ss][i_se].coeff_sca(1,joker));
+          nCoeff_sca = scat_data_spectral[i_ss][i_se].coeff_sca.ncols();
         }
         else
         {
           max_m_sca_local = 0;
+          nCoeff_sca = max_l_sca_local + 1;
+
         }
 
-        // The number of coefficients in the phase matrix does not equal the
-        // number of coefficients in coeff_inc, b\c the phase matrix is transformed
-        // over complex data (the coefficients from the first transformation)
-        // The number of coefficients needed for the incident direction is
-        // calculated here
-        if (max_m_inc_local > 0 && any_m_inc)
+        if (any_m_inc)
+        {
           nCoeff_inc = (Index) (max_l_inc_local + 1) * (max_l_inc_local + 1);
+
+        }
         else
+        {
           nCoeff_inc = max_l_inc_local + 1;
+        }
+
 
         pha_mat_real_temp.resize(nf, nT, nCoeff_sca, nCoeff_inc, stokes_dim, stokes_dim);
         pha_mat_imag_temp.resize(nf, nT, nCoeff_sca, nCoeff_inc, stokes_dim, stokes_dim);
+        // To only interpolate the values we will actually use in the simulation, the interpolation
+        // method also need the information about any m's desired. Currently, it only takes
+        // any_m_sca, as there are almost never any m's in the incident directions
 
         pha_mat_1ScatElemSpectral(pha_mat_real_temp,pha_mat_imag_temp,
                           ptypes[i_ss][i_se], t_ok(i_se_flat,joker),
                           scat_data_spectral[i_ss][i_se],
-                          T_array, f_start, t_interp_order);
-        // Do the mapping to the highest l_inc, m_inc and l_sca and m_sca (see DOC)
+                          T_array, f_start, any_m_sca, t_interp_order);
+          // Do the mapping to the highest l_inc, m_inc and l_sca and m_sca (see DOC)
         pha_mat_real[i_ss][i_se].resize(nf, nT, max_nlm_sca, max_nlm_inc,
                                         stokes_dim, stokes_dim);
         pha_mat_imag[i_ss][i_se].resize(nf, nT, max_nlm_sca, max_nlm_inc,
@@ -1727,11 +1731,11 @@ void pha_mat_1ScatElemSpectral(//Output
         const SpectralSingleScatteringData& ssd,
         const Vector& T_array,
         const Index& f_start,
+        const bool& any_m_sca,
         const Index& t_interp_order)
 {
   pha_mat_imag = 0.;
   pha_mat_real = 0.;
-  //FIXME: So far only implemented for real coefficients of ext_mat and abs_vec!!
   assert( ssd.ptype == PTYPE_TOTAL_RND or ssd.ptype == PTYPE_AZIMUTH_RND );
 
   const Index nf = pha_mat_real.nvitrines();
@@ -1742,17 +1746,20 @@ void pha_mat_1ScatElemSpectral(//Output
   assert( pha_mat_real.nshelves() == nTout );
   assert( t_ok.nelem() == nTout );
 
-  const Index max_l = (Index) max(ssd.coeff_inc(0,joker));
-  const Index max_m = (Index) max(ssd.coeff_inc(1,joker));
-  Index nCoeff_inc;
-  if (max_m > 0)
-    nCoeff_inc = (Index) (max_l + 1) * (max_l + 1);
-  else
-    nCoeff_inc = max_l + 1;
+  const Index nCoeff_inc = ssd.coeff_inc.ncols();
   assert( pha_mat_real.npages() == nCoeff_inc);
 
-  const Index nCoeff_sca = ssd.coeff_sca.ncols();
-  assert( pha_mat_real.nbooks() == nCoeff_sca);
+  Index nCoeff_sca;
+  if (any_m_sca)
+  {
+    nCoeff_sca = ssd.coeff_sca.ncols();
+    assert( pha_mat_real.nbooks() == nCoeff_sca);
+  }
+  else
+  {
+      const Index max_l_sca = (Index) max(ssd.coeff_sca(0,joker));
+      nCoeff_sca = max_l_sca + 1;
+  }
 
   const Index stokes_dim = pha_mat_real.ncols();
 

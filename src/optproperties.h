@@ -321,6 +321,7 @@ void pha_mat_1ScatElemSpectral(//Output
                         const SpectralSingleScatteringData& ssd,
                         const Vector& T_array,
                         const Index& f_index,
+                        const bool& any_m_sca,
                         const Index& t_interp_order=1);
 
 void FouComp_1ScatElem(//Output
