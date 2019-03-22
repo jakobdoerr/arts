@@ -320,6 +320,7 @@ endif()
 if (SHTNS_FOUND)
   include_directories (${SHTNS_INCLUDE_DIR})
   target_link_libraries (artscore ${SHTNS_LIBRARIES})
+  target_link_libraries (arts_api ${SHTNS_LIBRARIES})
 endif()
 
 if (NETCDF_FOUND)
