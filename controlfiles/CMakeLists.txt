@@ -127,6 +127,7 @@ endif ()
 if (ENABLE_RT4)
   arts_test_run_ctlfile(fast artscomponents/polradtran/TestRT4.arts)
   arts_test_run_ctlfile(fast artscomponents/hybridscat/TestHybrid.arts)
+  arts_test_run_ctlfile(slow artscomponents/polradtran/TestRT4Spectral.arts)
   arts_test_run_ctlfile(slow artscomponents/wfuns/TestWfunsHybCloudy.arts)
 endif ()
 
