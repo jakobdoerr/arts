@@ -192,16 +192,11 @@ void pha_mat_SpecToGrid(//Output
         const bool& any_m_inc,
         const bool& any_m_sca)
 {
-  //if (pha_mat_real_spectral(0,0,0,0,0,0) == 0)
-  //{
-  //  ostringstream os;
-  //  os << "Looks like you have all zeros in your data....dumbass!";
-  //  throw runtime_error( os.str() );
-  //}
   // Initialize gridded fields
   pha_matrix = 0.;
   shtns_cfg shtns_inc, shtns_sca;                // handle to a sht transform configuration
-  complex<double> *Qlm_inc, *Qlm_sca;      // spherical harmonics coefficients (l,m space): complex numbers.
+  complex<double> *Qlm_inc, *Qlm_sca,*Sh;      // spherical harmonics coefficients (l,m space): complex numbers.
+  double *Th;
 
   int mmax_inc, mmax_sca, lmax_inc, lmax_sca, NLM_inc, NLM_sca;
   // Calculate the number of l and m for incoming and scattered directions from the data
@@ -233,18 +228,18 @@ void pha_mat_SpecToGrid(//Output
     mmax_inc = 0;
   }
 
-  int nlat_inc = lmax_inc + 2 + lmax_inc%2; // Nlat has to be bigger than lmax
-  int nlat_sca = lmax_sca + 2 + lmax_sca%2;
-  int nphi_inc = 2*mmax_inc + 2 + mmax_inc%2; // NPhi has to be bigger than 2*mmax
-  int nphi_sca = 2*mmax_sca + 2 + mmax_sca%2;
+  int nlat_inc = 2*lmax_inc + 2; //+ lmax_inc%2; // Nlat has to be bigger than lmax
+  int nlat_sca = 2*lmax_sca + 2; //+ lmax_sca%2;
+  int nphi_inc = 2*mmax_inc + 1; // NPhi has to be bigger than 2*mmax
+  int nphi_sca = 2*mmax_sca + 1;
   int mres = 1;
   shtns_verbose(0);                       // displays informations during initialization.
   shtns_use_threads(0);           // enable multi-threaded transforms (if supported).
-  shtns_inc = shtns_init(sht_gauss, lmax_inc, mmax_inc, mres, nlat_inc, nphi_inc);
-  shtns_sca = shtns_init(sht_gauss, lmax_sca, mmax_sca, mres, nlat_sca, nphi_sca);
 
-  //shtns = shtns_create(lmax, mmax, mres, sht_orthonormal | SHT_REAL_NORM);
-  //shtns_set_grid(shtns, sht_gauss, 0.0, nlat, nphi);
+  // Create the two shtns objects for the two transformations
+  shtns_inc = shtns_init(sht_reg_poles, lmax_inc, mmax_inc, mres, nlat_inc, nphi_inc);
+  shtns_sca = shtns_init(sht_reg_poles, lmax_sca, mmax_sca, mres, nlat_sca, nphi_sca);
+
   NLM_inc = shtns_inc->nlm;
   NLM_sca = shtns_sca->nlm;
   // Memory allocation : the use of fftw_malloc is required because we need proper 16-byte alignement.
@@ -252,6 +247,22 @@ void pha_mat_SpecToGrid(//Output
   // allocate SH representations.
   Qlm_inc = (complex<double> *) fftw_malloc(NLM_inc * sizeof(complex<double>));
   Qlm_sca = (complex<double> *) fftw_malloc(NLM_sca * sizeof(complex<double>));
+  // Allocate the variable for the product after the first transformation
+  Sh = (complex<double> *) fftw_malloc( NSPAT_ALLOC(shtns_inc) * sizeof(complex<double>));
+  // Allocate the variable for the product after the second transformation
+  Th = (double *) fftw_malloc( NSPAT_ALLOC(shtns_sca) * sizeof(double));
+
+  // Extract the native grids of the two shtns objects
+  Vector za_grid_inc(nlat_inc,0);
+  for (Index lat_inc=0; lat_inc < nlat_inc; lat_inc++)
+  {
+    za_grid_inc[lat_inc] = acos(shtns_inc->ct[lat_inc])/DEG2RAD;
+  }
+  Vector za_grid_sca(nlat_sca,0);
+  for (Index lat_sca=0; lat_sca < nlat_sca; lat_sca++)
+  {
+      za_grid_sca[lat_sca] = acos(shtns_sca->ct[lat_sca])/DEG2RAD;
+  }
 
   const Index nf = pha_matrix.nvitrines();
   const Index nT = pha_matrix.nshelves();
@@ -263,6 +274,18 @@ void pha_mat_SpecToGrid(//Output
 
   const Index niDir = idir_array.nrows();
   assert( pha_matrix.npages() == niDir );
+
+  // derive the direction interpolation weights for incoming angles.
+  ArrayOfGridPos idir_gp(niDir);
+  gridpos(idir_gp, za_grid_inc, idir_array(joker,0));
+  Matrix idir_itw(niDir, 2); // only interpolating in za, ie 1D linear interpol
+  interpweights(idir_itw, idir_gp);
+
+  // derive the direction interpolation weights for scattered angles.
+  ArrayOfGridPos pdir_gp(npDir);
+  gridpos(pdir_gp, za_grid_sca, pdir_array(joker,0));
+  Matrix pdir_itw(npDir, 2); // only interpolating in za, ie 1D linear interpol
+  interpweights(pdir_itw, pdir_gp);
 
   // FIXME: Get rid of this assertion later, b\c it can handle any ptype..
   assert( ptype == PTYPE_TOTAL_RND or ptype == PTYPE_AZIMUTH_RND );
@@ -290,7 +313,7 @@ void pha_mat_SpecToGrid(//Output
                 {
                   for (Index i_lm = 0; i_lm < NLM_inc; i_lm++)
                   {
-                    // First spectral transformation (incoming anlges)
+                    // Prepare first spectral transformation (incoming angles)
                     Qlm_inc[i_lm] = complex<double>(pha_mat_real_spectral(
                             find, Tind, p_lm, i_lm, st1, st2)
                                     ,pha_mat_imag_spectral(
@@ -314,10 +337,13 @@ void pha_mat_SpecToGrid(//Output
         }
       }
     }
-  } // FIXME: IS IT RIGHT LIKE THIS???                                                                                                                                                                                                                                                                                                           
-  else // ptype azi random (and general)
+  }
+  else if (ptype == PTYPE_AZIMUTH_RND)// ptype azi random (and general)
   {
-    Index nDir = npDir * niDir;
+    Matrix pha_matrix_temp(nlat_sca,nlat_inc);
+    Matrix pha_matrix_interp(npDir,nlat_inc);
+    ComplexMatrix pha_mat_temp(NLM_sca,nlat_inc);
+    //Index nDir = npDir * niDir;
     Matrix delta_aa(npDir, niDir);
 
     for (Index pdir = 0; pdir < npDir; pdir++)
@@ -333,53 +359,76 @@ void pha_mat_SpecToGrid(//Output
     {
       for (Index Tind = 0; Tind < nT; Tind++)
       {
-        for (Index pdir = 0; pdir < npDir; pdir++)
+        for (Index st1 = 0; st1 < pha_matrix.nrows(); st1++)
         {
-          for (Index idir = 0; idir < niDir; idir++)
+          for (Index st2 = 0; st2 < pha_matrix.ncols(); st2++)
           {
-            for (Index st1 = 0; st1 < pha_matrix.nrows(); st1++)
+            for (Index p_lm = 0; p_lm < NLM_sca; p_lm++)
             {
-              for (Index st2 = 0; st2 < pha_matrix.ncols(); st2++)
+              for (Index i_lm = 0; i_lm < NLM_inc; i_lm++)
               {
-                for (Index p_lm = 0; p_lm < NLM_sca; p_lm++)
-                {
-                  for (Index i_lm = 0; i_lm < NLM_inc; i_lm++)
-                  {
-                    // First spectral transformation (incoming angles)
-                    Qlm_inc[i_lm] = complex<double>(pha_mat_real_spectral(
-                                     find, Tind, p_lm, i_lm, st1, st2)
-                                          ,pha_mat_imag_spectral(
-                                     find, Tind, p_lm, i_lm, st1, st2));
-                  }
-                  // Here the first trafo happens.
-                  Qlm_sca[p_lm] = SH_to_point(shtns_inc, Qlm_inc,
-                                              cos(idir_array(idir, 0)*DEG2RAD),
-                                              idir_array(idir, 1)*DEG2RAD);
-                }
-                pha_matrix(find, Tind, pdir, idir, st1, st2) =
-                          SH_to_point(shtns_sca, Qlm_sca, cos(pdir_array(pdir, 0)*DEG2RAD),
-                                       pdir_array(pdir, 1)*DEG2RAD);
+                // First spectral transformation (incoming angles)
+                Qlm_inc[i_lm] = complex<double>(pha_mat_real_spectral(
+                         find, Tind, p_lm, i_lm, st1, st2)
+                         ,pha_mat_imag_spectral(
+                         find, Tind, p_lm, i_lm, st1, st2));
+
+
+              }
+              // Here the first trafo happens.
+              SH_to_spat_cplx(shtns_inc, Qlm_inc,Sh);
+              for (Index idir = 0; idir < nlat_inc; idir++)
+              {
+                pha_mat_temp(p_lm,idir) = Sh[idir];
               }
             }
-            if( stokes_dim>2 )
+            for (Index idir = 0; idir < nlat_inc; idir++)
             {
-              if (delta_aa(pdir, idir) < 0.)
+              for (Index p_lm = 0; p_lm < NLM_sca; p_lm++)
               {
-                pha_matrix(find, joker, pdir, idir, 0, 2) *= -1;
-                pha_matrix(find, joker, pdir, idir, 1, 2) *= -1;
-                pha_matrix(find, joker, pdir, idir, 2, 0) *= -1;
-                pha_matrix(find, joker, pdir, idir, 2, 1) *= -1;
+                Qlm_sca[p_lm] = pha_mat_temp(p_lm,idir);
               }
+              // Here the second trafo happens
+              SH_to_spat(shtns_sca, Qlm_sca,Th);
+              for (Index pdir = 0; pdir < nlat_sca; pdir++)
+              {
+                pha_matrix_temp(pdir, idir) = Th[pdir];
+              }
+            // Interpolate the temporary phase matrix from the native SHTNS
+            // angular grids to the grid specified in the input of this method
+            interp(pha_matrix_interp(joker,idir),pdir_itw,pha_matrix_temp(joker,idir),pdir_gp);
             }
-            if( stokes_dim>3 )
+            for (Index pdir = 0; pdir < npDir; pdir++)
             {
-              if( delta_aa(pdir,idir)<0. )
-              {
-                pha_matrix(find,joker,pdir,idir,0,3) *= -1;
-                pha_matrix(find,joker,pdir,idir,1,3) *= -1;
-                pha_matrix(find,joker,pdir,idir,3,0) *= -1;
-                pha_matrix(find,joker,pdir,idir,3,1) *= -1;
-              }
+              // Interpolate the temporary phase matrix from the native SHTNS
+              // angular grids to the grid specified in the input of this method
+              interp(pha_matrix(find,Tind,pdir,joker,st1,st2),idir_itw,pha_matrix_interp(pdir,joker),idir_gp);
+            }
+          }
+        }
+      }
+      for (Index pdir = 0; pdir < npDir; pdir++)
+      {
+        for (Index idir = 0; idir < niDir; idir++)
+        {
+          if( stokes_dim>2 )
+          {
+            if (delta_aa(pdir, idir) < 0.)
+            {
+              pha_matrix(find, joker, pdir, idir, 0, 2) *= -1;
+              pha_matrix(find, joker, pdir, idir, 1, 2) *= -1;
+              pha_matrix(find, joker, pdir, idir, 2, 0) *= -1;
+              pha_matrix(find, joker, pdir, idir, 2, 1) *= -1;
+            }
+          }
+          if( stokes_dim>3 )
+          {
+            if( delta_aa(pdir,idir)<0. )
+            {
+              pha_matrix(find,joker,pdir,idir,0,3) *= -1;
+              pha_matrix(find,joker,pdir,idir,1,3) *= -1;
+              pha_matrix(find,joker,pdir,idir,3,0) *= -1;
+              pha_matrix(find,joker,pdir,idir,3,1) *= -1;
             }
           }
         }

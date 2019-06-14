@@ -167,11 +167,8 @@ void run_rt4_spectral( Workspace& ws,
               const Index& robust,
               const Index& za_interp_order,
               const Index& cos_za_interp,
-              const String& pfct_method,
-              const Index& pfct_aa_grid_size,
               const Numeric& pfct_threshold,
               const Numeric& max_delta_tau,
-              const Index& new_optprop,
               const Verbosity& verbosity );
 
 void scat_za_grid_adjust( // Output
@@ -261,8 +258,6 @@ void sca_optpropCalcSpectral( //Output
                       const Index& stokes_dim,
                       const Vector& scat_za_grid,
                       ConstVectorView quad_weights,
-                      const String& pfct_method,
-                      const Index& pfct_aa_grid_size,
                       const Numeric& pfct_threshold,
                       const Index& auto_inc_nstreams,
                       ConstTensor3View t_field,

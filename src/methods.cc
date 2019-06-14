@@ -15871,32 +15871,24 @@ void define_md_data_raw()
             "atmosphere_dim",
             "pnd_field", "t_field", "z_field", "vmr_field", "p_grid",
             "scat_data_spectral", "f_grid", "stokes_dim" ),
-        GIN(         "nstreams", "pfct_method", "quad_type",
-                     "add_straight_angles", "pfct_aa_grid_size",
+        GIN(         "nstreams", "quad_type",
+                     "add_straight_angles",
                      "auto_inc_nstreams", "robust",
-                     "za_interp_order", "cos_za_interp", "max_delta_tau",
-                     "new_optprop" ),
-        GIN_TYPE(    "Index",    "String",      "String",
-                     "Index",               "Index",
+                     "za_interp_order", "cos_za_interp", "max_delta_tau"),
+        GIN_TYPE(    "Index",     "String",
+                     "Index",
                      "Index",             "Index",
-                     "Index",           "Index",         "Numeric",
-                     "Index" ),
-        GIN_DEFAULT( "16",       "median",      "D",
-                     "1",                   "19",
+                     "Index",           "Index",         "Numeric"),
+        GIN_DEFAULT( "16",       "D",
+                     "1",
                      "0",                 "0",
-                     "1",               "0",             "1e-6",
-                     "0" ),
+                     "1",               "0",             "1e-6"),
         GIN_DESC( "Number of polar angle directions (streams) in RT4"
                   " solution (must be an even number).",
-                  "Flag which method to apply to derive phase function (for"
-                  " available options see above).",
                   "Flag which quadrature to apply in RT4 solution (for"
                   " available options see above).",
                   "Flag whether to include nadir and zenith as explicit"
                   " directions (only effective for quad_type G and D).",
-                  "Number of azimuthal angle grid points to consider in"
-                  " Fourier series decomposition of scattering matrix (only"
-                  " applied for randomly oriented scattering elements)",
                   "Flag whether to internally increase nstreams (individually"
                   " per frequency) if norm of (bulk) scattering matrix is not"
                   " preserved properly. If 0, no adaptation is done. Else"
@@ -15915,9 +15907,7 @@ void define_md_data_raw()
                   "For *auto_inc_nstreams*>0, flag whether to do polar angle"
                   " interpolation in cosine (='mu') space.",
                   "Maximum optical depth of infinitesimal layer (where single"
-                  " scattering approximation is assumed to apply).",
-                  "Flag whether to use old (0) or new(1) optical property"
-                  " extraction scheme." )
+                  " scattering approximation is assumed to apply).")
         ));
 
   md_data_raw.push_back
@@ -16685,14 +16675,13 @@ void define_md_data_raw()
         GOUT_TYPE(),
         GOUT_DESC(),
         IN( "scat_data_spectral", "f_grid" ),
-        GIN(         "dfrel_threshold", "check_level", "sca_mat_threshold" ),
-        GIN_TYPE(    "Numeric",         "String",      "Numeric" ),
-        GIN_DEFAULT( "0.1",             "all",         "5e-2" ),
+        GIN(         "dfrel_threshold", "check_level"),
+        GIN_TYPE(    "Numeric",         "String"),
+        GIN_DEFAULT( "0.1",             "all"),
         GIN_DESC( "Maximum relative frequency deviation between (single entry)"
                   " scattering element f_grid values and the RT calculation's"
                   " *f_grid*.",
-                  "See *check_level* in *scat_data_spectralCheck*.",
-                  "See *sca_mat_threshold* in *scat_data_spectralCheck*." )
+                  "See *check_level* in *scat_data_spectralCheck*.")
         ));
 
   md_data_raw.push_back
@@ -16841,23 +16830,17 @@ void define_md_data_raw()
         "consistent with the scattering cross section (C_sca) derived from\n"
         "the difference of extinction (K11) and absorption (a1):\n"
         "int_z11 ~ C_sca = K11-a1.\n"
-        "The check is skipped if *check_type* is 'sane'.\n"
-        "\n"
-        "Sufficient consistency is defined by the maximum allowed deviation\n"
-        "in single scattering albedo, *sca_mat_threshold*, testing for\n"
-        "  ( <int_Z11>/<C_sca>-1. ) * ( <C_sca>/<K11> ) <= sca_mat_threshold.\n"
-        ),
+        "The check is skipped if *check_type* is 'sane'.\n"),
         AUTHORS( "Jakob Doerr", "Claudia Emde", "Jana Mendrok" ),
         OUT(),
         GOUT(),
         GOUT_TYPE(),
         GOUT_DESC(),
         IN( "scat_data_spectral" ),
-        GIN(         "check_type", "sca_mat_threshold" ),
-        GIN_TYPE(    "String", "Numeric" ),
-        GIN_DEFAULT( "all", "5e-2" ),
-        GIN_DESC( "The level of checks to apply on scat_data_spectral (see above).",
-        "Threshold for allowed albedo deviation (see above)." )
+        GIN(         "check_type" ),
+        GIN_TYPE(    "String" ),
+        GIN_DEFAULT( "all"),
+        GIN_DESC( "The level of checks to apply on scat_data_spectral (see above).")
         ));
 
   md_data_raw.push_back

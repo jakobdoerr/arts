@@ -1748,11 +1748,8 @@ void run_rt4_spectral( Workspace& ws,
               const Index& robust,
               const Index& za_interp_order,
               const Index& cos_za_interp,
-              const String& pfct_method,
-              const Index& pfct_aa_grid_size,
               const Numeric& pfct_threshold,
               const Numeric& max_delta_tau,
-              const Index& new_optprop,
               const Verbosity& verbosity )
 {
   // Input variables for RT4
@@ -1893,8 +1890,7 @@ void run_rt4_spectral( Workspace& ws,
                                   emis_vector(0, joker, joker, joker, joker),
                                   extinct_matrix(0, joker, joker, joker, joker, joker),
                                   f_index, scat_data_spectral, pnd_field, stokes_dim,
-                                  scat_za_grid, quad_weights,
-                                  pfct_method, pfct_aa_grid_size, pfct_threshold,
+                                  scat_za_grid, quad_weights, pfct_threshold,
                                   auto_inc_nstreams, t_field(Range(0, num_layers + 1), joker, joker),
                                   cloudbox_limits, verbosity);
         }
@@ -1996,7 +1992,7 @@ void run_rt4_spectral( Workspace& ws,
                                  extinct_matrix_new(0,joker,joker,joker,joker,joker),
                                  f_index, scat_data_spectral, pnd_field, stokes_dim,
                                  scat_za_grid, quad_weights_new,
-                                 pfct_method, pfct_aa_grid_size, pfct_threshold,
+                                 pfct_threshold,
                                  auto_inc_nstreams, t_field(Range(0,num_layers+1),joker,joker),
                                  cloudbox_limits,verbosity );
 
@@ -2033,7 +2029,7 @@ void run_rt4_spectral( Workspace& ws,
                                      extinct_matrix_new(0,joker,joker,joker,joker,joker),
                                      f_index, scat_data_spectral, pnd_field, stokes_dim,
                                      scat_za_grid, quad_weights_new,
-                                     pfct_method, pfct_aa_grid_size, pfct_threshold,
+                                     pfct_threshold,
                                      0, t_field(Range(0,num_layers+1),joker,joker),
                                      cloudbox_limits,verbosity );
                 }
@@ -3062,8 +3058,6 @@ void sca_optpropCalcSpectral( //Output
         const Index& stokes_dim,
         const Vector& scat_za_grid,
         ConstVectorView quad_weights,
-        const String& pfct_method,
-        const Index& pfct_aa_grid_size,
         const Numeric& pfct_threshold,
         const Index& auto_inc_nstreams,
         ConstTensor3View t_field,
@@ -3119,7 +3113,11 @@ void sca_optpropCalcSpectral( //Output
   Tensor6 sca_mat(1,Np_cloud,nza_rt,nza_rt,stokes_dim,stokes_dim);
   Index ptype_bulk;
   bool any_m_inc = false;
-  bool any_m_sca = false;
+  bool any_m_sca = false; // this tells the function whether to use values of m/=0 in the
+                          // spectral Data, which is equivalent to a phi-dependence of the
+                          // phase matrix over the scattered angles. For Azi-Random, this thould
+                          // be set to FALSE, for General, it should be set to TRUE (though TRUE
+                          // is not bug free and takes very long)
 
   pha_mat_NScatElemsSpectral(pha_mat_real_Nse,pha_mat_imag_Nse,ptypes_Nse,t_ok,
                              any_m_inc,any_m_sca,

@@ -189,17 +189,14 @@ void RT4CalcSpectral( Workspace& ws,
                 const Vector& f_grid,
                 const Index& stokes_dim,
                 const Index& nstreams,
-                const String& pfct_method,
                 const String& quadtype,
                 const Index& add_straight_angles,
-                const Index& pfct_aa_grid_size,
                 //const Numeric& pfct_threshold,
                 const Index& auto_inc_nstreams,
                 const Index& robust,
                 const Index& za_interp_order,
                 const Index& cos_za_interp,
                 const Numeric& max_delta_tau,
-                const Index& new_optprop,
                 const Verbosity& verbosity )
 {
   if (!cloudbox_on)
@@ -273,9 +270,8 @@ void RT4CalcSpectral( Workspace& ws,
            surf_refl_mat, surf_emis_vec, surface_rtprop_agenda, surf_altitude,
            quad_type, mu_values, quad_weights,
            auto_inc_nstreams, robust, za_interp_order, cos_za_interp,
-           pfct_method, pfct_aa_grid_size, pfct_threshold,
-           max_delta_tau, new_optprop,
-           verbosity );
+           pfct_threshold,
+           max_delta_tau, verbosity );
 
   scat_za_grid_adjust( scat_za_grid, mu_values, nummu );
 }

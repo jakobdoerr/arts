@@ -1443,7 +1443,6 @@ void scat_dataCheck( //Input:
 void scat_data_spectralCheck( //Input:
         const ArrayOfArrayOfSpectralSingleScatteringData& scat_data_spectral,
         const String& check_type,
-        const Numeric& threshold,
         const Verbosity& verbosity )
 {
     CREATE_OUT0;

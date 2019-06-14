@@ -1197,7 +1197,6 @@ void scat_data_checkedCalcSpectral(
    const Vector&         f_grid,
    const Numeric&        dfrel_threshold,
    const String&         check_level,
-   const Numeric&        sca_mat_threshold,
    const Verbosity&      verbosity )
 // FIXME: when we allow K, a, Z to be on different f and T grids, their use in
 // the scatt solvers needs to be reviewed again and adapted to this!
@@ -1457,7 +1456,7 @@ void scat_data_checkedCalcSpectral(
     // 3) sca_mat norm sufficiently good (int(Z11)~=K11-a1?)
     // 1) & 2) always done
     // 3) only done if scat_data_check_level is "all"
-    scat_data_spectralCheck( scat_data_spectral, check_level, sca_mat_threshold,
+    scat_data_spectralCheck( scat_data_spectral, check_level,
                     verbosity );
   }
 
