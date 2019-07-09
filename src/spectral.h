@@ -32,6 +32,9 @@
    that are of interest elsewhere.
 */
 
+#ifndef spectral_h
+#define spectral_h
+
 #include "matpackVII.h"
 #include "mystring.h"
 #include "messages.h"
@@ -58,3 +61,5 @@ void pha_mat_SpecToGrid(//Output
         const Index& ptype,
         const bool& any_m_inc,
         const bool& any_m_sca);
+
+#endif /* spectral_h */
