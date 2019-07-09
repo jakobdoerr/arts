@@ -838,6 +838,12 @@ int main (int argc, char **argv)
 #else
         << "enabled (experimental, no FFTW support, using slow convolution method)" << endl
 #endif
+        << "   Spherical harmonics:  "
+#ifdef ENABLE_SHTNS
+        << "enabled (experimental)" << endl
+#else
+        << "disabled (requires SHTns library)" << endl
+#endif
         << "";
 
       osfeatures  << "Include search paths: " << endl;
