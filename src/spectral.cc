@@ -46,6 +46,8 @@
 #include "optproperties.h"
 #include "xml_io.h"
 #include "spectral.h"
+
+#ifdef ENABLE_SHTNS
 #include "shtns.h"
 #include <fftw3.h>
 #include <complex.h>
@@ -437,5 +439,36 @@ void pha_mat_SpecToGrid(//Output
   }
 }
 
+#else
+
+void opt_prop_SpecToGrid(//Output
+                Tensor5View,
+                Tensor4View,
+                //Input
+                const Tensor5&,
+                const Tensor4&,
+                const Matrix&,
+                const bool&)
+{
+    throw std::runtime_error("Spherical harmonics not available. ARTS was "
+                             "compiled without SHTns library support.");
+};
+
+void pha_mat_SpecToGrid(//Output
+    Tensor6View,
+    //Input
+    const Tensor6&,
+    const Tensor6&,
+    const Matrix&,
+    const Matrix&,
+    const Index&,
+    const bool&,
+    const bool&)
+{
+    throw std::runtime_error("Spherical harmonics not available. ARTS was "
+                             "compiled without SHTns library support.");
+}
+
+#endif /* ENABLE_SHTNS */
 
 

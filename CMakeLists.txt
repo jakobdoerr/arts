@@ -258,11 +258,6 @@ if (NOT NO_OPENMP AND NOT CMAKE_GENERATOR STREQUAL "Xcode")
   include (FindOpenMP)
 endif (NOT NO_OPENMP AND NOT CMAKE_GENERATOR STREQUAL "Xcode")
 
-########## SHTns support #########
-if (NOT NO_SHTNS)
-  include (FindSHTns)
-endif()
-
 ########### Docserver support ##########
 
 if (NOT NO_DOCSERVER)
@@ -467,6 +462,11 @@ endif()
 
 if (FFTW_FOUND)
   message (STATUS "HITRAN XSEC enabled (experimental)")
+
+  ########## SHTns support #########
+  if (NOT NO_SHTNS)
+    include (FindSHTns)
+  endif()
 else()
   message (STATUS "HITRAN XSEC enabled (experimental, "
                   "FFTW library not available, using slow convolution method)")

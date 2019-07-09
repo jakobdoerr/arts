@@ -464,8 +464,6 @@ void RT4CalcSpectral( Workspace&,
                 const Index&,
                 const Index&,
                 const String&,
-                const String&,
-                const Index&,
                 const Index&,
                 //const Numeric&,
                 const Index&,
@@ -473,8 +471,7 @@ void RT4CalcSpectral( Workspace&,
                 const Index&,
                 const Index&,
                 const Numeric&,
-                const Index&,
-                const Verbosity& )
+                const Verbosity&)
 {
     throw runtime_error ("This version of ARTS was compiled without RT4 support.");
 }
