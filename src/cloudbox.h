@@ -60,12 +60,21 @@ void chk_scattering_data(const ArrayOfSingleScatteringData& scat_data,
                          const ArrayOfScatteringMetaData& scat_meta,
                          const Verbosity& verbosity);
 
+void chk_spectral_scattering_data(
+    const ArrayOfSpectralSingleScatteringData& scat_data,
+    const ArrayOfScatteringMetaData& scat_meta,
+    const Verbosity& verbosity);
+
 void chk_scattering_meta_data(const ScatteringMetaData& scat_meta_single,
                               const String& scat_meta_file,
                               const Verbosity& verbosity);
 
 void chk_scat_data(const SingleScatteringData& scat_data,
                    const Verbosity& verbosity);
+
+void chk_scat_data_spectral(
+    const SpectralSingleScatteringData& scat_data_spectral,
+    const Verbosity& verbosity);
 
 bool is_gp_inside_cloudbox(const GridPos& gp_p,
                            const GridPos& gp_lat,

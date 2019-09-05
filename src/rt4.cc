@@ -42,6 +42,7 @@
 #include "physics_funcs.h"
 #include "rt4.h"
 #include "rte.h"
+#include "spectral.h"
 
 using std::ostringstream;
 using std::runtime_error;
@@ -195,6 +196,168 @@ void check_rt4_input(  // Output
   //------------- end of checks ---------------------------------------
 }
 
+
+//! check_rt4_inputSpectral
+/*!
+  Checks that input of RT4Calc* is sane.
+
+  \param nhstreams             Number of single hemisphere streams (quadrature angles).
+  \param nhza                  Number of single hemisphere additional angles with RT output.
+  \param nummu                 Total number of single hemisphere angles with RT output.
+  \param cloudbox_on           as the WSV
+  \param rt4_is_initialized    as the WSV
+  \param atmfields_checked     as the WSV
+  \param atmgeom_checked       as the WSV
+  \param cloudbox_checked      as the WSV
+  \param nstreams              Total number of quadrature angles (both hemispheres).
+  \param quad_type             Quadrature method.
+  \param pnd_ncols             Number of columns (latitude points) in *pnd_field*.
+  \param ifield_npages         Number of pages (polar angle points) in *doit_i_field*.
+
+  \author Jana Mendrok
+  \date   2017-02-22
+*/
+void check_rt4_inputSpectral(  // Output
+    Index& nhstreams,
+    Index& nhza,
+    Index& nummu,
+    // Input
+    const Index& cloudbox_on,
+    const Index& atmfields_checked,
+    const Index& atmgeom_checked,
+    const Index& cloudbox_checked,
+    const Index& scat_data_checked,
+    const ArrayOfIndex& cloudbox_limits,
+    const ArrayOfArrayOfSpectralSingleScatteringData& scat_data_spectral,
+    const Index& atmosphere_dim,
+    const Index& stokes_dim,
+    const Index& nstreams,
+    const String& quad_type,
+    const Index& add_straight_angles,
+    const Index& pnd_ncols) {
+  // Don't do anything if there's no cloudbox defined.
+  //if (!cloudbox_on) return;
+  // Seems to loopholy to just skip the scattering, so rather throw an error
+  // (assuming if RT4 is called than it's expected that a scattering calc is
+  // performed. semi-quietly skipping can easily be missed and lead to wrong
+  // conclusions.).
+  if (!cloudbox_on) {
+    throw runtime_error(
+        "Cloudbox is off, no scattering calculations to be"
+        " performed.");
+  }
+
+  if (atmfields_checked != 1)
+    throw runtime_error(
+        "The atmospheric fields must be flagged to have"
+        " passed a consistency check (atmfields_checked=1).");
+  if (atmgeom_checked != 1)
+    throw runtime_error(
+        "The atmospheric geometry must be flagged to have"
+        " passed a consistency check (atmgeom_checked=1).");
+  if (cloudbox_checked != 1)
+    throw runtime_error(
+        "The cloudbox must be flagged to have"
+        " passed a consistency check (cloudbox_checked=1).");
+  if (scat_data_checked != 1)
+    throw runtime_error(
+        "The scat_data must be flagged to have "
+        "passed a consistency check (scat_data_checked=1).");
+
+  if (atmosphere_dim != 1)
+    throw runtime_error(
+        "For running RT4, atmospheric dimensionality"
+        " must be 1.\n");
+
+  if (stokes_dim < 0 || stokes_dim > 2)
+    throw runtime_error(
+        "For running RT4, the dimension of stokes vector"
+        " must be 1 or 2.\n");
+
+  if (cloudbox_limits[0] != 0) {
+    ostringstream os;
+    os << "RT4 calculations currently only possible with"
+       << " lower cloudbox limit\n"
+       << "at 0th atmospheric level"
+       << " (assumes surface there, ignoring z_surface).\n";
+    throw runtime_error(os.str());
+  }
+
+  if (cloudbox_limits.nelem() != 2 * atmosphere_dim)
+    throw runtime_error(
+        "*cloudbox_limits* is a vector which contains the"
+        " upper and lower limit of the cloud for all"
+        " atmospheric dimensions. So its dimension must"
+        " be 2 x *atmosphere_dim*");
+
+  if (scat_data_spectral.empty())
+    throw runtime_error(
+        "No spectral single scattering data present.\n"
+        "See documentation of WSV *scat_data* for options to"
+        " make single scattering data available.\n");
+
+  if (pnd_ncols != 1)
+    throw runtime_error(
+        "*pnd_field* is not 1D! \n"
+        "RT4 can only be used for 1D!\n");
+
+  if (quad_type.length() > 1) {
+    ostringstream os;
+    os << "Input parameter *quad_type* not allowed to contain more than a"
+       << " single character.\n"
+       << "Yours has " << quad_type.length() << ".\n";
+    throw runtime_error(os.str());
+  }
+
+  if (quad_type == "D" || quad_type == "G") {
+    if (add_straight_angles)
+      nhza = 1;
+    else
+      nhza = 0;
+  } else if (quad_type == "L") {
+    nhza = 0;
+  } else {
+    ostringstream os;
+    os << "Unknown quadrature type: " << quad_type
+       << ".\nOnly D, G, and L allowed.\n";
+    throw runtime_error(os.str());
+  }
+
+  // RT4 actually uses number of angles in single hemisphere. However, we don't
+  // want a bunch of different approaches used in the interface, so we apply the
+  // DISORT (and ARTS) way of total number of angles here. Hence, we have to
+  // ensure here that total number is even.
+  if (nstreams / 2 * 2 != nstreams) {
+    ostringstream os;
+    os << "RT4 requires an even number of streams, but yours is " << nstreams
+       << ".\n";
+    throw runtime_error(os.str());
+  }
+  nhstreams = nstreams / 2;
+  // nummu is the total number of angles in one hemisphere, including both
+  // the quadrature angles and the "extra" angles.
+  nummu = nhstreams + nhza;
+
+  // RT4 can only completely or azimuthally randomly oriented particles.
+  bool no_p10 = true;
+  for (Index i_ss = 0; i_ss < scat_data_spectral.nelem(); i_ss++)
+    for (Index i_se = 0; i_se < scat_data_spectral[i_ss].nelem(); i_se++)
+      if (scat_data_spectral[i_ss][i_se].ptype != PTYPE_TOTAL_RND &&
+          scat_data_spectral[i_ss][i_se].ptype != PTYPE_AZIMUTH_RND)
+        no_p10 = false;
+  if (!no_p10) {
+    ostringstream os;
+    os << "RT4 can only handle scattering elements of type " << PTYPE_TOTAL_RND
+       << " (" << PTypeToString(PTYPE_TOTAL_RND) << ") and\n"
+       << PTYPE_AZIMUTH_RND << " (" << PTypeToString(PTYPE_AZIMUTH_RND)
+       << "),\n"
+       << "but at least one element of other type (" << PTYPE_GENERAL << "="
+       << PTypeToString(PTYPE_GENERAL) << ") is present.\n";
+    throw runtime_error(os.str());
+  }
+
+  //------------- end of checks ---------------------------------------
+}
 
 void get_quad_angles(  // Output
     VectorView mu_values,
@@ -863,6 +1026,526 @@ void run_rt4(Workspace& ws,
 }
 
 
+//! run_rt4_spectral
+/*!
+  Prepares actual input variables for RT4, runs it, and sorts the output into
+  doit_i_field.
+
+  \param ws                    Current workspace
+  \param doit_i_field          as the WSV
+  \param f_grid                as the WSV
+  \param p_grid                as the WSV
+  \param z_field               as the WSV
+  \param t_field               as the WSV
+  \param vmr_field             as the WSV
+  \param pnd_field             as the WSV
+  \param scat_data_spectral    as the WSV
+  \param propmat_clearsky_agenda  as the WSA
+  \param cloudbox_limits       as the WSV
+  \param stokes_dim            as the WSV
+  \param nummu                 Total number of single hemisphere angles with RT output.
+  \param nhza                  Number of single hemisphere additional angles with RT output.
+  \param ground_type           Surface reflection type flag.
+  \param surface_skin_t        as the WSV
+  \param ground_albedo         Scalar surface albedo (for ground_type=L).
+  \param ground_reflec         Vector surface relfectivity (for ground_type=S).
+  \param ground_index          Surface complex refractive index (for ground_type=F).
+  \param surf_refl_mat         Surface reflection matrix (for ground_type=A).
+  \param surf_emis_vec         Surface emission vector (for ground_type=A).
+  \param quad_type             Quadrature method.
+  \param scat_za_grid          as the WSV
+  \param mu_values             Quadrature angle cosines.
+  \param quad_weights          Quadrature weights associated with mu_values.
+  \param auto_inc_nstreams     as the WSV
+  \param pfct_method           see RT4Calc doc.
+  \param pfct_aa_grid_size     see RT4Calc doc.
+  \param pfct_threshold        Requested scatter_matrix norm accuracy (in terms of single scat albedo).
+  \param max_delta_tau         see RT4Calc doc.
+
+  \author Jana Mendrok
+  \date   2017-02-22
+*/
+void run_rt4_spectral(
+    Workspace& ws,
+    // Output
+    Tensor7& doit_i_field,
+    Vector& scat_za_grid,
+    // Input
+    ConstVectorView f_grid,
+    ConstVectorView p_grid,
+    ConstTensor3View z_field,
+    ConstTensor3View t_field,
+    ConstTensor4View vmr_field,
+    ConstTensor4View pnd_field,
+    const ArrayOfArrayOfSpectralSingleScatteringData& scat_data_spectral,
+    const Agenda& propmat_clearsky_agenda,
+    const ArrayOfIndex& cloudbox_limits,
+    const Index& stokes_dim,
+    const Index& nummu,
+    const Index& nhza,
+    const String& ground_type,
+    const Numeric& surface_skin_t,
+    ConstVectorView ground_albedo,
+    ConstTensor3View ground_reflec,
+    ConstComplexVectorView ground_index,
+    ConstTensor5View surf_refl_mat,
+    ConstTensor3View surf_emis_vec,
+    const Agenda& surface_rtprop_agenda,
+    const Numeric& surf_altitude,
+    const String& quad_type,
+    Vector& mu_values,
+    ConstVectorView quad_weights,
+    const Index& auto_inc_nstreams,
+    const Index& robust,
+    const Index& za_interp_order,
+    const Index& cos_za_interp,
+    const Numeric& pfct_threshold,
+    const Numeric& max_delta_tau,
+    const Verbosity& verbosity) {
+  // Input variables for RT4
+  Index num_layers = p_grid.nelem() - 1;
+
+  // Top of the atmosphere temperature
+  //  FIXME: so far hard-coded to cosmic background. However, change that to set
+  //  according to/from space_agenda.
+  // to do so, we need to hand over sky_radiance instead of sky_temp as
+  // Tensor3(2,stokes_dim,nummu) per frequency. That is, for properly using
+  // iy_space_agenda, we need to recall the agenda over the stream angles (not
+  // sure what to do with the upwelling ones. according to the RT¤-internal
+  // sizing, sky_radiance contains even those. but they might not be used
+  // (check!) and hence be set arbitrary.
+  const Numeric sky_temp = COSMIC_BG_TEMP;
+
+  // Data fields
+  Vector height(num_layers + 1);
+  Vector temperatures(num_layers + 1);
+  for (Index i = 0; i < height.nelem(); i++) {
+    height[i] = z_field(num_layers - i, 0, 0);
+    temperatures[i] = t_field(num_layers - i, 0, 0);
+  }
+
+  // this indexes all cloudbox layers as cloudy layers.
+  // optional FIXME: to use the power of RT4 (faster solving scheme for
+  // individual non-cloudy layers), one should consider non-cloudy layers within
+  // cloudbox. That requires some kind of recognition and index setting based on
+  // pnd_field or (derived) cloud layer extinction or scattering.
+  // we use something similar with iyHybrid. have a look there...
+  const Index num_scatlayers = pnd_field.npages() - 1;
+  Vector scatlayers(num_layers, 0.);
+  Vector gas_extinct(num_layers, 0.);
+  Tensor6 scatter_matrix(
+      num_scatlayers, 4, nummu, stokes_dim, nummu, stokes_dim, 0.);
+  Tensor6 extinct_matrix(
+      1, num_scatlayers, 2, nummu, stokes_dim, stokes_dim, 0.);
+  Tensor5 emis_vector(1, num_scatlayers, 2, nummu, stokes_dim, 0.);
+
+  // if there is no scatt particle at all, we don't need to calculate the
+  // scat properties (FIXME: that should rather be done by a proper setting
+  // of scat_layers).
+  Vector pnd_per_level(pnd_field.npages());
+  for (Index clev = 0; clev < pnd_field.npages(); clev++)
+    pnd_per_level[clev] = pnd_field(joker, clev, 0, 0).sum();
+  Numeric pndtot = pnd_per_level.sum();
+
+  for (Index i = 0; i < cloudbox_limits[1] - cloudbox_limits[0]; i++) {
+    scatlayers[num_layers - 1 - cloudbox_limits[0] - i] = float(i + 1);
+  }
+
+  // Output variables
+  Tensor3 up_rad(num_layers + 1, nummu, stokes_dim, 0.);
+  Tensor3 down_rad(num_layers + 1, nummu, stokes_dim, 0.);
+
+  Tensor6 extinct_matrix_allf;
+  Tensor5 emis_vector_allf;
+  if (!auto_inc_nstreams) {
+    extinct_matrix_allf.resize(
+        f_grid.nelem(), num_scatlayers, 2, nummu, stokes_dim, stokes_dim);
+    emis_vector_allf.resize(
+        f_grid.nelem(), num_scatlayers, 2, nummu, stokes_dim);
+    par_optpropCalcSpectral(emis_vector_allf,
+                            extinct_matrix_allf,
+                            //scatlayers,
+                            scat_data_spectral,
+                            scat_za_grid,
+                            -1,
+                            pnd_field,
+                            t_field(Range(0, num_layers + 1), joker, joker),
+                            cloudbox_limits,
+                            stokes_dim);
+    if (emis_vector_allf.nshelves() == 1)  // scat_data had just a single freq
+                                           // point. copy into emis/ext here and
+                                           // don't touch anymore later on.
+    {
+      emis_vector = emis_vector_allf(Range(0, 1), joker, joker, joker, joker);
+      extinct_matrix =
+          extinct_matrix_allf(Range(0, 1), joker, joker, joker, joker, joker);
+    }
+  }
+
+  // FIXME: once, all old optprop scheme incl. the applied agendas is removed,
+  // we can remove this as well.
+  Vector scat_za_grid_orig;
+  if (auto_inc_nstreams)
+    // For the WSV scat_za_grid, we need to reset these grids instead of
+    // creating a new container. this because further down some agendas are
+    // used that access scat_za/aa_grid through the workspace.
+    // Later on, we need to reconstruct the original setting, hence backup
+    // that here.
+    scat_za_grid_orig = scat_za_grid;
+
+  Index nummu_new = 0;
+  // Loop over frequencies
+  for (Index f_index = 0; f_index < f_grid.nelem(); f_index++) {
+    // Wavelength [um]
+    Numeric wavelength;
+    wavelength = 1e6 * SPEED_OF_LIGHT / f_grid[f_index];
+
+    Matrix groundreflec = ground_reflec(f_index, joker, joker);
+    Tensor4 surfreflmat = surf_refl_mat(f_index, joker, joker, joker, joker);
+    Matrix surfemisvec = surf_emis_vec(f_index, joker, joker);
+    //Vector muvalues=mu_values;
+
+    // only update gas_extinct if there is any gas absorption at all (since
+    // vmr_field is not freq-dependent, gas_extinct will remain as above
+    // initialized (with 0) for all freqs, ie we can rely on that it wasn't
+    // changed).
+    if (vmr_field.nbooks() > 0) {
+      gas_optpropCalc(ws,
+                      gas_extinct,
+                      propmat_clearsky_agenda,
+                      t_field(Range(0, num_layers + 1), joker, joker),
+                      vmr_field(joker, Range(0, num_layers + 1), joker, joker),
+                      p_grid[Range(0, num_layers + 1)],
+                      f_grid[Range(f_index, 1)]);
+    }
+
+    Index pfct_failed = 0;
+    if (pndtot) {
+      if (nummu_new < nummu) {
+        if (!auto_inc_nstreams)  // all freq calculated before. just copy
+        // here. but only if needed.
+        {
+          if (emis_vector_allf.nshelves() != 1) {
+            emis_vector =
+                emis_vector_allf(Range(f_index, 1), joker, joker, joker, joker);
+            extinct_matrix = extinct_matrix_allf(
+                Range(f_index, 1), joker, joker, joker, joker, joker);
+          }
+        } else {
+          par_optpropCalcSpectral(
+              emis_vector,
+              extinct_matrix,
+              //scatlayers,
+              scat_data_spectral,
+              scat_za_grid,
+              f_index,
+              pnd_field,
+              t_field(Range(0, num_layers + 1), joker, joker),
+              cloudbox_limits,
+              stokes_dim);
+        }
+        sca_optpropCalcSpectral(
+            scatter_matrix,
+            pfct_failed,
+            emis_vector(0, joker, joker, joker, joker),
+            extinct_matrix(0, joker, joker, joker, joker, joker),
+            f_index,
+            scat_data_spectral,
+            pnd_field,
+            stokes_dim,
+            scat_za_grid,
+            quad_weights,
+            pfct_threshold,
+            auto_inc_nstreams,
+            t_field(Range(0, num_layers + 1), joker, joker),
+            cloudbox_limits,
+            verbosity);
+      } else {
+        pfct_failed = 1;
+      }
+    }
+
+    if (!pfct_failed) {
+#pragma omp critical(fortran_rt4)
+      {
+        // Call RT4
+        radtrano_(stokes_dim,
+                  nummu,
+                  nhza,
+                  max_delta_tau,
+                  quad_type.c_str(),
+                  surface_skin_t,
+                  ground_type.c_str(),
+                  ground_albedo[f_index],
+                  ground_index[f_index],
+                  groundreflec.get_c_array(),
+                  surfreflmat.get_c_array(),
+                  surfemisvec.get_c_array(),
+                  sky_temp,
+                  wavelength,
+                  num_layers,
+                  height.get_c_array(),
+                  temperatures.get_c_array(),
+                  gas_extinct.get_c_array(),
+                  num_scatlayers,
+                  scatlayers.get_c_array(),
+                  extinct_matrix.get_c_array(),
+                  emis_vector.get_c_array(),
+                  scatter_matrix.get_c_array(),
+                  //noutlevels,
+                  //outlevels.get_c_array(),
+                  mu_values.get_c_array(),
+                  up_rad.get_c_array(),
+                  down_rad.get_c_array());
+      }
+    } else  // if (auto_inc_nstreams)
+    {
+      if (nummu_new < nummu) nummu_new = nummu + 1;
+
+      Index nhstreams_new;
+      Vector mu_values_new, quad_weights_new, scat_aa_grid_new;
+      Tensor6 scatter_matrix_new;
+      Tensor6 extinct_matrix_new;
+      Tensor5 emis_vector_new;
+      Tensor4 surfreflmat_new;
+      Matrix surfemisvec_new;
+
+      while (pfct_failed && (2 * nummu_new) <= auto_inc_nstreams) {
+        // resize and recalc nstream-affected/determined variables:
+        //   - mu_values, quad_weights (resize & recalc)
+        nhstreams_new = nummu_new - nhza;
+        mu_values_new.resize(nummu_new);
+        mu_values_new = 0.;
+        quad_weights_new.resize(nummu_new);
+        quad_weights_new = 0.;
+        get_quad_angles(mu_values_new,
+                        quad_weights_new,
+                        scat_za_grid,
+                        scat_aa_grid_new,
+                        quad_type,
+                        nhstreams_new,
+                        nhza,
+                        nummu_new);
+
+        //   - resize & recalculate emis_vector, extinct_matrix (as input to scatter_matrix calc)
+        extinct_matrix_new.resize(
+            1, num_scatlayers, 2, nummu_new, stokes_dim, stokes_dim);
+        extinct_matrix_new = 0.;
+        emis_vector_new.resize(1, num_scatlayers, 2, nummu_new, stokes_dim);
+        emis_vector_new = 0.;
+        // FIXME: So far, outside-of-freq-loop calculated optprops will fall
+        // back to in-loop-calculated ones in case of auto-increasing stream
+        // numbers. There might be better options, but I (JM) couldn't come up
+        // with or decide for one so far (we could recalc over all freqs. but
+        // that would unnecessarily recalc lower-freq optprops, too, which are
+        // not needed anymore. which could likely take more time than we
+        // potentially safe through all-at-once temperature and direction
+        // interpolations.
+        par_optpropCalcSpectral(emis_vector_new,
+                                extinct_matrix_new,
+                                //scatlayers,
+                                scat_data_spectral,
+                                scat_za_grid,
+                                f_index,
+                                pnd_field,
+                                t_field(Range(0, num_layers + 1), joker, joker),
+                                cloudbox_limits,
+                                stokes_dim);
+
+        //   - resize & recalc scatter_matrix
+        scatter_matrix_new.resize(
+            num_scatlayers, 4, nummu_new, stokes_dim, nummu_new, stokes_dim);
+        scatter_matrix_new = 0.;
+        pfct_failed = 0;
+        sca_optpropCalcSpectral(
+            scatter_matrix_new,
+            pfct_failed,
+            emis_vector_new(0, joker, joker, joker, joker),
+            extinct_matrix_new(0, joker, joker, joker, joker, joker),
+            f_index,
+            scat_data_spectral,
+            pnd_field,
+            stokes_dim,
+            scat_za_grid,
+            quad_weights_new,
+            pfct_threshold,
+            auto_inc_nstreams,
+            t_field(Range(0, num_layers + 1), joker, joker),
+            cloudbox_limits,
+            verbosity);
+
+        if (pfct_failed) nummu_new = nummu_new + 1;
+      }
+
+      if (pfct_failed) {
+        nummu_new = nummu_new - 1;
+        ostringstream os;
+        os << "Could not increase nstreams sufficiently (current: "
+           << 2 * nummu_new << ")\n"
+           << "to satisfy scattering matrix norm at f[" << f_index
+           << "]=" << f_grid[f_index] * 1e-9 << " GHz.\n";
+        if (!robust) {
+          // couldn't find a nstreams within the limits of auto_inc_nstremas
+          // (aka max. nstreams) that satisfies the scattering matrix norm.
+          // Hence fail completely.
+          os << "Try higher maximum number of allowed streams (ie. higher"
+             << " auto_inc_nstreams than " << auto_inc_nstreams << ").";
+          throw runtime_error(os.str());
+        } else {
+          CREATE_OUT1;
+          os << "Continuing with nstreams=" << 2 * nummu_new
+             << ". Output for this frequency might be erroneous.";
+          out1 << os.str();
+          pfct_failed = -1;
+          sca_optpropCalcSpectral(
+              scatter_matrix_new,
+              pfct_failed,
+              emis_vector_new(0, joker, joker, joker, joker),
+              extinct_matrix_new(0, joker, joker, joker, joker, joker),
+              f_index,
+              scat_data_spectral,
+              pnd_field,
+              stokes_dim,
+              scat_za_grid,
+              quad_weights_new,
+              pfct_threshold,
+              0,
+              t_field(Range(0, num_layers + 1), joker, joker),
+              cloudbox_limits,
+              verbosity);
+        }
+      }
+
+      // resize and calc remaining nstream-affected variables:
+      //   - in case of surface_rtprop_agenda driven surface: surfreflmat, surfemisvec
+      if (ground_type == "A")  // surface_rtprop_agenda driven surface
+      {
+        Tensor5 srm_new(1, nummu_new, stokes_dim, nummu_new, stokes_dim, 0.);
+        Tensor3 sev_new(1, nummu_new, stokes_dim, 0.);
+        surf_optpropCalc(ws,
+                         srm_new,
+                         sev_new,
+                         surface_rtprop_agenda,
+                         f_grid[Range(f_index, 1)],
+                         scat_za_grid,
+                         mu_values_new,
+                         quad_weights_new,
+                         stokes_dim,
+                         surf_altitude);
+        surfreflmat_new = srm_new(0, joker, joker, joker, joker);
+        surfemisvec_new = sev_new(0, joker, joker);
+      }
+      //   - up/down_rad (resize only)
+      Tensor3 up_rad_new(num_layers + 1, nummu_new, stokes_dim, 0.);
+      Tensor3 down_rad_new(num_layers + 1, nummu_new, stokes_dim, 0.);
+      //
+      // run radtrano_
+#pragma omp critical(fortran_rt4)
+      {
+        // Call RT4
+        radtrano_(stokes_dim,
+                  nummu_new,
+                  nhza,
+                  max_delta_tau,
+                  quad_type.c_str(),
+                  surface_skin_t,
+                  ground_type.c_str(),
+                  ground_albedo[f_index],
+                  ground_index[f_index],
+                  groundreflec.get_c_array(),
+                  surfreflmat_new.get_c_array(),
+                  surfemisvec_new.get_c_array(),
+                  sky_temp,
+                  wavelength,
+                  num_layers,
+                  height.get_c_array(),
+                  temperatures.get_c_array(),
+                  gas_extinct.get_c_array(),
+                  num_scatlayers,
+                  scatlayers.get_c_array(),
+                  extinct_matrix_new(0, joker, joker, joker, joker, joker)
+                      .get_c_array(),
+                  emis_vector_new(0, joker, joker, joker, joker).get_c_array(),
+                  scatter_matrix_new.get_c_array(),
+                  //noutlevels,
+                  //outlevels.get_c_array(),
+                  mu_values_new.get_c_array(),
+                  up_rad_new.get_c_array(),
+                  down_rad_new.get_c_array());
+      }
+      // back-interpolate nstream_new fields to nstreams
+      //   (possible to use iyCloudboxInterp agenda? nja, not really a good
+      //   idea. too much overhead there (checking, 3D+2ang interpol). rather
+      //   use interp_order as additional user parameter.
+      //   extrapol issues shouldn't occur as we go from finer to coarser
+      //   angular grid)
+      //   - loop over nummu:
+      //     - determine weights per ummu ang (should be valid for both up and
+      //       down)
+      //     - loop over num_layers and stokes_dim:
+      //       - apply weights
+      for (Index j = 0; j < nummu; j++) {
+        GridPosPoly gp_za;
+        if (cos_za_interp) {
+          gridpos_poly(
+              gp_za, mu_values_new, mu_values[j], za_interp_order, 0.5);
+        } else {
+          gridpos_poly(gp_za,
+                       scat_za_grid[Range(0, nummu_new)],
+                       scat_za_grid_orig[j],
+                       za_interp_order,
+                       0.5);
+        }
+        Vector itw(gp_za.idx.nelem());
+        interpweights(itw, gp_za);
+
+        for (Index k = 0; k < num_layers + 1; k++)
+          for (Index ist = 0; ist < stokes_dim; ist++) {
+            up_rad(k, j, ist) = interp(itw, up_rad_new(k, joker, ist), gp_za);
+            down_rad(k, j, ist) =
+                interp(itw, down_rad_new(k, joker, ist), gp_za);
+          }
+      }
+
+      // reconstruct scat_za_grid
+      scat_za_grid = scat_za_grid_orig;
+    }
+
+    // RT4 rad output is in wavelength units, nominally in W/(m2 sr um), where
+    // wavelength input is required in um.
+    // FIXME: When using wavelength input in m, output should be in W/(m2 sr
+    // m). However, check this. So, at first we use wavelength in um. Then
+    // change and compare.
+    //
+    // FIXME: if ever we allow the cloudbox to be not directly at the surface
+    // (at atm level #0, respectively), the assigning from up/down_rad to
+    // doit_i_field needs to checked. there seems some offsetting going on
+    // (test example: TestDOIT.arts. if kept like below, doit_i_field at
+    // top-of-cloudbox seems to actually be from somewhere within the
+    // cloud(box) indicated by downwelling being to high and downwelling
+    // exhibiting a non-zero polarisation signature (which it wouldn't with
+    // only scalar gas abs above).
+    //
+    Numeric rad_l2f = wavelength / f_grid[f_index];
+    // down/up_rad contain the radiances in order from slant (90deg) to steep
+    // (0 and 180deg, respectively) streams,then the possible extra angle(s).
+    // We need to resort them properly into doit_i_field, such that order is
+    // from 0 to 180deg.
+    for (Index j = 0; j < nummu; j++)
+      for (Index k = 0; k < (cloudbox_limits[1] - cloudbox_limits[0] + 1); k++)
+        for (Index ist = 0; ist < stokes_dim; ist++) {
+          //doit_i_field(f_index, k, 0, 0, nummu+j, 0, ist) =
+          //  up_rad(num_layers-k,j,ist)*rad_l2f;
+          //doit_i_field(f_index, k, 0, 0, nummu-1-j, 0, ist) =
+          //  down_rad(num_layers-k,j,ist)*rad_l2f;
+          doit_i_field(f_index, k, 0, 0, nummu + j, 0, ist) =
+              up_rad(num_layers - k, j, ist) * rad_l2f;
+          doit_i_field(f_index, k, 0, 0, nummu - 1 - j, 0, ist) =
+              down_rad(num_layers - k, j, ist) * rad_l2f;
+        }
+  }
+}
+
 void scat_za_grid_adjust(  // Output
     Vector& scat_za_grid,
     // Input
@@ -1037,6 +1720,134 @@ void par_optpropCalc(Tensor5View emis_vector,
 }
 
 
+//! par_optpropCalcSpectral
+/*!
+  Calculates layer averaged particle extinction and absorption (extinct_matrix
+  and emis_vector)). These variables are required as input for the RT4 subroutine.
+
+  \param emis_vector           Layer averaged particle absorption for all particle layers
+  \param extinct_matrix        Layer averaged particle extinction for all particle layers
+  \param scat_data_spectral    as the WSV
+  \param scat_za_grid          as the WSV
+  \param f_index               index of frequency grid point handeled
+  \param pnd_field             as the WSV
+  \param t_field               as the WSV
+  \param cloudbox_limits       as the WSV
+  \param stokes_dim            as the WSV
+  \param nummu                 Number of single hemisphere polar angles.
+
+  \author Jana Mendrok, Jakob Doerr
+  \date   2018-05-04
+*/
+void par_optpropCalcSpectral(
+    Tensor5View emis_vector,
+    Tensor6View extinct_matrix,
+    //VectorView scatlayers,
+    const ArrayOfArrayOfSpectralSingleScatteringData& scat_data_spectral,
+    const Vector& scat_za_grid,
+    const Index& f_index,
+    ConstTensor4View pnd_field,
+    ConstTensor3View t_field,
+    const ArrayOfIndex& cloudbox_limits,
+    const Index& stokes_dim) {
+  // Initialization
+  // FIXME: Null indices rein --> null indices raus!
+  extinct_matrix = 0.;
+  emis_vector = 0.;
+
+  const Index Np_cloud = pnd_field.npages();
+  const Index nummu = scat_za_grid.nelem() / 2;
+  bool any_m;
+
+  assert(emis_vector.nbooks() == Np_cloud - 1);
+  assert(extinct_matrix.nshelves() == Np_cloud - 1);
+
+  // preparing input data
+  Vector T_array = t_field(Range(cloudbox_limits[0], Np_cloud), 0, 0);
+  Matrix dir_array(scat_za_grid.nelem(), 2, 0.);
+  dir_array(joker, 0) = scat_za_grid;
+  // making output containers
+  ArrayOfArrayOfTensor5 ext_mat_Nse;
+  ArrayOfArrayOfTensor4 abs_vec_Nse;
+  ArrayOfArrayOfIndex ptypes_Nse;
+  Matrix t_ok;
+  ArrayOfTensor5 ext_mat_ssbulk;
+  ArrayOfTensor4 abs_vec_ssbulk;
+  ArrayOfIndex ptype_ssbulk;
+  Tensor5 ext_mat_bulk;
+  Tensor4 abs_vec_bulk;
+  Index ptype_bulk;
+
+  opt_prop_NScatElemsSpectral(ext_mat_Nse,
+                              abs_vec_Nse,
+                              ptypes_Nse,
+                              t_ok,
+                              any_m,
+                              scat_data_spectral,
+                              stokes_dim,
+                              T_array,
+                              f_index);
+  opt_prop_ScatSpecBulk(ext_mat_ssbulk,
+                        abs_vec_ssbulk,
+                        ptype_ssbulk,
+                        ext_mat_Nse,
+                        abs_vec_Nse,
+                        ptypes_Nse,
+                        pnd_field(joker, joker, 0, 0),
+                        t_ok);
+  opt_prop_Bulk(ext_mat_bulk,
+                abs_vec_bulk,
+                ptype_bulk,
+                ext_mat_ssbulk,
+                abs_vec_ssbulk,
+                ptype_ssbulk);
+
+  Tensor5 extinct_matrix_temp(abs_vec_bulk.nbooks(),
+                              Np_cloud,
+                              dir_array.nrows(),
+                              ext_mat_bulk.nrows(),
+                              ext_mat_bulk.ncols());
+  Tensor4 emis_vec_temp(
+      abs_vec_bulk.nbooks(), Np_cloud, dir_array.nrows(), abs_vec_bulk.ncols());
+
+  opt_prop_SpecToGrid(extinct_matrix_temp,
+                      emis_vec_temp,
+                      ext_mat_bulk,
+                      abs_vec_bulk,
+                      dir_array,
+                      any_m);
+  // Calculate layer averaged extinction and absorption and sort into RT4-format
+  // data tensors
+  for (Index ipc = 0; ipc < Np_cloud - 1; ipc++) {
+    /*
+    if ( (ext_mat_bulk(0,ipc,0,0,0)+
+          ext_mat_bulk(0,ipc+1,0,0,0)) > 0. )
+    {
+      scatlayers[Np_cloud-2-cloudbox_limits[0]-ipc] = float(ipc);
+*/
+    for (Index fi = 0; fi < abs_vec_bulk.nbooks(); fi++)
+      for (Index imu = 0; imu < nummu; imu++)
+        for (Index ist1 = 0; ist1 < stokes_dim; ist1++) {
+          for (Index ist2 = 0; ist2 < stokes_dim; ist2++) {
+            extinct_matrix(fi, ipc, 0, imu, ist2, ist1) =
+                .5 * (extinct_matrix_temp(fi, ipc, imu, ist1, ist2) +
+                      extinct_matrix_temp(fi, ipc + 1, imu, ist1, ist2));
+            extinct_matrix(fi, ipc, 1, imu, ist2, ist1) =
+                .5 *
+                (extinct_matrix_temp(fi, ipc, nummu + imu, ist1, ist2) +
+                 extinct_matrix_temp(fi, ipc + 1, nummu + imu, ist1, ist2));
+          }
+          emis_vector(fi, ipc, 0, imu, ist1) =
+              .5 * (emis_vec_temp(fi, ipc, imu, ist1) +
+                    emis_vec_temp(fi, ipc + 1, imu, ist1));
+          emis_vector(fi, ipc, 1, imu, ist1) =
+              .5 * (emis_vec_temp(fi, ipc, nummu + imu, ist1) +
+                    emis_vec_temp(fi, ipc + 1, nummu + imu, ist1));
+        }
+    //    }
+  }
+}
+
 void sca_optpropCalc(  //Output
     Tensor6View scatter_matrix,
     Index& pfct_failed,
@@ -1067,7 +1878,6 @@ void sca_optpropCalc(  //Output
 
   // Initialization
   scatter_matrix = 0.;
-
   const Index N_se = pnd_field.nbooks();
   const Index Np_cloud = pnd_field.npages();
   const Index nza_rt = scat_za_grid.nelem();
@@ -1397,6 +2207,277 @@ void sca_optpropCalc(  //Output
   }
 }
 
+
+//! sca_optpropCalcSpectral
+/*!
+  Calculates layer (and azimuthal) averaged phase matrix (scatter_matrix). This
+  variable is required as input for the RT4 subroutine.
+
+  \param scatter_matrix        Layer averaged scattering matrix (azimuth mode 0) for all particle layers
+  \param pfct_failed           Flag whether norm of scatter_matrix is sufficiently accurate
+  \param emis_vector           Layer averaged particle absorption for all particle layers
+  \param extinct_matrix        Layer averaged particle extinction for all particle layers
+  \param f_index               as the WSV
+  \param scat_data_spectral    as the (new-type, f_grid prepared) WSV
+  \param pnd_field             as the WSV
+  \param stokes_dim            as the WSV
+  \param scat_za_grid          as the WSV
+  \param quad_weights          Quadrature weights associated with scat_za_grid
+  \param pfct_method           Method for scattering matrix temperature dependance handling
+  \param pfct_aa_grid_size     Number of azimuthal grid points in Fourier series decomposition of randomly oriented particles
+  \param pfct_threshold        Requested scatter_matrix norm accuracy (in terms of single scat albedo)
+  \param auto_inc_nstreams     as the WSV
+
+  \author Jakob Doerr
+  \date   2018-07-08
+*/
+void sca_optpropCalcSpectral(  //Output
+    Tensor6View scatter_matrix,
+    Index& pfct_failed,
+    //Input
+    ConstTensor4View emis_vector,
+    ConstTensor5View extinct_matrix,
+    const Index& f_index,
+    const ArrayOfArrayOfSpectralSingleScatteringData& scat_data_spectral,
+    ConstTensor4View pnd_field,
+    const Index& stokes_dim,
+    const Vector& scat_za_grid,
+    ConstVectorView quad_weights,
+    const Numeric& pfct_threshold,
+    const Index& auto_inc_nstreams,
+    ConstTensor3View t_field,
+    const ArrayOfIndex& cloudbox_limits,
+    const Verbosity& verbosity) {
+  // FIXME: this whole funtions needs revision/optimization regarding
+  // - temperature dependence (using new-type scat_data)
+  // - using redundancies in sca_mat data at least for totally random
+  //   orientation particles (are there some for az. random, too? like
+  //   upper/lower hemisphere equiv?) - we might at least have a flag
+  //   (transported down from calling function?) whether we deal exclusively
+  //   with totally random orient particles (and then take some shortcuts...)
+
+  // FIXME: do we have numerical issues, too, here in case of tiny pnd? check
+  // with Patrick's Disort-issue case.
+
+  // Initialization
+  scatter_matrix = 0.;
+
+  const Index N_se = pnd_field.nbooks();
+  const Index Np_cloud = pnd_field.npages();
+  const Index nza_rt = scat_za_grid.nelem();
+
+  assert(scatter_matrix.nvitrines() == Np_cloud - 1);
+
+  // Check that total number of scattering elements in scat_data and pnd_field
+  // agree.
+  // FIXME: this should be done earlier. in calling method. outside freq- and
+  // other possible loops. rather assert than runtime error.
+  if (TotalNumberOfElements(scat_data_spectral) != N_se) {
+    ostringstream os;
+    os << "Total number of scattering elements in scat_data ("
+       << TotalNumberOfElements(scat_data_spectral) << ") and pnd_field ("
+       << N_se << ") disagree.";
+    throw runtime_error(os.str());
+  }
+  // preparing input data
+  Vector T_array = t_field(Range(cloudbox_limits[0], Np_cloud), 0, 0);
+  Matrix dir_array(scat_za_grid.nelem(), 2, 0.);
+  dir_array(joker, 0) = scat_za_grid;
+  // making output containers
+  ArrayOfArrayOfTensor6 pha_mat_real_Nse;
+  ArrayOfArrayOfTensor6 pha_mat_imag_Nse;
+  ArrayOfArrayOfIndex ptypes_Nse;
+  Matrix t_ok;
+  ArrayOfTensor6 pha_mat_real_ssbulk;
+  ArrayOfTensor6 pha_mat_imag_ssbulk;
+  ArrayOfIndex ptype_ssbulk;
+  Tensor6 pha_mat_real_bulk;
+  Tensor6 pha_mat_imag_bulk;
+  Tensor6 sca_mat(1, Np_cloud, nza_rt, nza_rt, stokes_dim, stokes_dim);
+  Index ptype_bulk;
+  bool any_m_inc = false;
+  bool any_m_sca =
+      false;  // this tells the function whether to use values of m/=0 in the
+              // spectral Data, which is equivalent to a phi-dependence of the
+      // phase matrix over the scattered angles. For Azi-Random, this thould
+      // be set to FALSE, for General, it should be set to TRUE (though TRUE
+      // is not bug free and takes very long)
+
+  pha_mat_NScatElemsSpectral(pha_mat_real_Nse,
+                             pha_mat_imag_Nse,
+                             ptypes_Nse,
+                             t_ok,
+                             any_m_inc,
+                             any_m_sca,
+                             scat_data_spectral,
+                             stokes_dim,
+                             T_array,
+                             f_index);
+
+  pha_mat_ScatSpecBulk(pha_mat_real_ssbulk,
+                       ptype_ssbulk,
+                       pha_mat_real_Nse,
+                       ptypes_Nse,
+                       pnd_field(joker, joker, 0, 0),
+                       t_ok);
+  pha_mat_ScatSpecBulk(pha_mat_imag_ssbulk,
+                       ptype_ssbulk,
+                       pha_mat_imag_Nse,
+                       ptypes_Nse,
+                       pnd_field(joker, joker, 0, 0),
+                       t_ok);
+
+  pha_mat_Bulk(
+      pha_mat_real_bulk, ptype_bulk, pha_mat_real_ssbulk, ptype_ssbulk);
+  pha_mat_Bulk(
+      pha_mat_imag_bulk, ptype_bulk, pha_mat_imag_ssbulk, ptype_ssbulk);
+  pha_mat_SpecToGrid(sca_mat,
+                     pha_mat_real_bulk,
+                     pha_mat_imag_bulk,
+                     dir_array,
+                     dir_array,
+                     ptype_bulk,
+                     any_m_inc,
+                     any_m_sca);
+
+  Index nummu = nza_rt / 2;
+  for (Index pind = 0; pind < Np_cloud - 1; pind++) {
+    for (Index iza = 0; iza < nummu; iza++) {
+      // JM171003: not clear to me anymore why this check. if pnd_mean
+      // is non-zero, then extinction should also be non-zero by
+      // default?
+      //if ( (extinct_matrix(scat_p_index_local,0,iza,0,0)+
+      //      extinct_matrix(scat_p_index_local,1,iza,0,0)) > 0. )
+      for (Index sza = 0; sza < nummu; sza++) {
+        for (Index ist1 = 0; ist1 < stokes_dim; ist1++)
+          for (Index ist2 = 0; ist2 < stokes_dim; ist2++) {
+            // we can't use stokes_dim jokers here since '*' doesn't
+            // exist for Num*MatView. Also, order of stokes matrix
+            // dimensions is inverted here (aka scat matrix is
+            // transposed).
+            // Attention: opt_prop_SpecToGrid returns the phase matrix with
+            // the scattered angles coming first, but RT4 needs the incoming
+            // angles first. Therefore, switch dimensions.
+            scatter_matrix(pind, 0, iza, ist2, sza, ist1) +=
+                0.5 * (sca_mat(0, pind, sza, iza, ist1, ist2) +
+                       sca_mat(0, pind + 1, sza, iza, ist1, ist2));
+            scatter_matrix(pind, 1, iza, ist2, sza, ist1) +=
+                0.5 * (sca_mat(0, pind, sza, nummu + iza, ist1, ist2) +
+                       sca_mat(0, pind + 1, sza, nummu + iza, ist1, ist2));
+            scatter_matrix(pind, 2, iza, ist2, sza, ist1) +=
+                0.5 * (sca_mat(0, pind, nummu + sza, iza, ist1, ist2) +
+                       sca_mat(0, pind + 1, nummu + sza, iza, ist1, ist2));
+            scatter_matrix(pind, 3, iza, ist2, sza, ist1) +=
+                0.5 *
+                (sca_mat(0, pind, nummu + sza, nummu + iza, ist1, ist2) +
+                 sca_mat(0, pind + 1, nummu + sza, nummu + iza, ist1, ist2));
+          }
+      }
+    }
+    for (Index iza = 0; iza < nummu; iza++) {
+      for (Index ih = 0; ih < 2; ih++) {
+        if (extinct_matrix(pind, ih, iza, 0, 0) > 0.) {
+          Numeric sca_mat_integ = 0.;
+
+          // We need to calculate the nominal values for the fixed T, we
+          // used above in the pha_mat extraction. Only this tells us whether
+          // angular resolution is sufficient.
+          //
+          //Numeric ext_nom = extinct_matrix(scat_p_index_local,ih,iza,0,0);
+          //Numeric sca_nom = ext_nom-emis_vector(scat_p_index_local,ih,iza,0);
+          Numeric ext_nom = extinct_matrix(pind, ih, iza, 0, 0);
+          Numeric sca_nom = ext_nom - emis_vector(pind, ih, iza, 0);
+          Numeric w0_nom = sca_nom / ext_nom;
+          assert(w0_nom >= 0.);
+
+          for (Index sza = 0; sza < nummu; sza++) {
+            //                SUM2 = SUM2 + 2.0D0*PI*QUAD_WEIGHTS(J2)*
+            //     .                 ( SCATTER_MATRIX(1,J2,1,J1, L,TSL)
+            //     .                 + SCATTER_MATRIX(1,J2,1,J1, L+2,TSL) )
+            sca_mat_integ += quad_weights[sza] *
+                             (scatter_matrix(pind, ih, iza, 0, sza, 0) +
+                              scatter_matrix(pind, ih + 2, iza, 0, sza, 0));
+          }
+
+          // compare integrated scatt matrix with ext-abs for respective
+          // incident polar angle - consistently with scat_dataCheck, we do
+          // this in terms of albedo deviation (since PFCT deviations at
+          // small albedos matter less than those at high albedos)
+          //            SUM1 = EMIS_VECTOR(1,J1,L,TSL)-EXTINCT_MATRIX(1,1,J1,L,TSL)
+          Numeric w0_act = 2. * PI * sca_mat_integ / ext_nom;
+          Numeric pfct_norm = 2. * PI * sca_mat_integ / sca_nom;
+          /*
+          cout << "sca_mat norm deviates " << 1e2*abs(1.-pfct_norm) << "%"
+               << " (" << abs(w0_act-w0_nom) << " in albedo).\n";
+          */
+          Numeric sca_nom_paropt = extinct_matrix(pind, ih, iza, 0, 0) -
+                                   emis_vector(pind, ih, iza, 0);
+          //Numeric w0_nom_paropt = sca_nom_paropt /
+          //  extinct_matrix(scat_p_index_local,ih,iza,0,0);
+          /*
+          cout << "scat_p=" << scat_p_index_local
+               << ", iza=" << iza << ", hem=" << ih << "\n";
+          cout << "  scaopt (paropt) w0_act= " << w0_act
+               << ", w0_nom = " << w0_nom
+               << " (" << w0_nom_paropt
+               << "), diff=" << w0_act-w0_nom
+               << " (" << w0_nom-w0_nom_paropt << ").\n";
+          */
+
+          if (abs(w0_act - w0_nom) > pfct_threshold) {
+            if (pfct_failed >= 0) {
+              if (auto_inc_nstreams) {
+                pfct_failed = 1;
+                return;
+              } else {
+                ostringstream os;
+                os << "Bulk scattering matrix normalization deviates significantly\n"
+                   << "from expected value (" << 1e2 * abs(1. - pfct_norm)
+                   << "%,"
+                   << " resulting in albedo deviation of "
+                   << abs(w0_act - w0_nom) << ").\n"
+                   << "Something seems wrong with your scattering data "
+                   << " (did you run *scat_dataCheck*?)\n"
+                   << "or your RT4 setup (try increasing *nstreams* and in case"
+                   << " of randomly oriented particles possibly also"
+                   << " pfct_aa_grid_size).";
+                throw runtime_error(os.str());
+              }
+            }
+          } else if (abs(w0_act - w0_nom) > pfct_threshold * 0.1 ||
+                     abs(1. - pfct_norm) > 1e-2) {
+            CREATE_OUT2;
+            out2
+                << "Warning: The bulk scattering matrix is not well normalized\n"
+                << "Deviating from expected value by "
+                << 1e2 * abs(1. - pfct_norm) << "% (and "
+                << abs(w0_act - w0_nom) << " in terms of scattering albedo).\n";
+          }
+          // rescale scattering matrix to expected (0,0) value (and scale all
+          // other elements accordingly)
+          //
+          // However, here we should not use the pfct_norm based on the
+          // deviation from the fixed-temperature ext and abs. Instead, for
+          // energy conservation reasons, this needs to be consistent with
+          // extinct_matrix and emis_vector. Hence, recalculate pfct_norm
+          // from them.
+          //cout << "  scaopt (paropt) pfct_norm dev = " << 1e2*pfct_norm-1e2;
+          pfct_norm = 2. * PI * sca_mat_integ / sca_nom_paropt;
+          //cout << " (" << 1e2*pfct_norm-1e2 << ")%.\n";
+          //
+          // FIXME: not fully clear whether applying the same rescaling
+          // factor to all stokes elements is the correct way to do. check
+          // out, e.g., Vasilieva (JQSRT 2006) for better approaches.
+          // FIXME: rather rescale Z(0,0) only as we should have less issues
+          // for other Z elements as they are less peaked/featured.
+          scatter_matrix(pind, ih, iza, joker, joker, joker) /= pfct_norm;
+          scatter_matrix(pind, ih + 2, iza, joker, joker, joker) /= pfct_norm;
+          //if (scat_p_index_local==49)
+        }
+      }
+    }
+  }
+}
 
 void surf_optpropCalc(Workspace& ws,
                       //Output

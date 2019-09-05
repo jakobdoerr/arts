@@ -1642,6 +1642,77 @@ void xml_write_to_stream(ostream& os_xml,
   os_xml << '\n';
 }
 
+//=== ArrayOfSpectralSingleScatteringData===========================================
+
+//! Reads ArrayOfSpectralSingleScatteringData from XML input stream
+/*!
+  \param is_xml   XML Input stream
+  \param asssdata  ArrayOfSpectralSingleScatteringData return value
+  \param pbifs    Pointer to binary input stream. NULL in case of ASCII file.
+*/
+void xml_read_from_stream(istream& is_xml,
+                          ArrayOfSpectralSingleScatteringData& asssdata,
+                          bifstream* pbifs,
+                          const Verbosity& verbosity) {
+  ArtsXMLTag tag(verbosity);
+  Index nelem;
+
+  tag.read_from_stream(is_xml);
+  tag.check_name("Array");
+  tag.check_attribute("type", "SpectralSingleScatteringData");
+
+  tag.get_attribute_value("nelem", nelem);
+  asssdata.resize(nelem);
+
+  Index n;
+  try {
+    for (n = 0; n < nelem; n++)
+      xml_read_from_stream(is_xml, asssdata[n], pbifs, verbosity);
+  } catch (runtime_error e) {
+    ostringstream os;
+    os << "Error reading ArrayOfSpectralSingleScatteringData: "
+       << "\n Element: " << n << "\n"
+       << e.what();
+    throw runtime_error(os.str());
+  }
+
+  tag.read_from_stream(is_xml);
+  tag.check_name("/Array");
+}
+
+//! Writes ArrayOfSpecrtalSingleScatteringData to XML output stream
+/*!
+  \param os_xml   XML Output stream
+  \param asssdata  ArrayOfSpectralSingleScatteringData
+  \param pbofs    Pointer to binary file stream. NULL for ASCII output.
+  \param name     Optional name attribute
+*/
+void xml_write_to_stream(ostream& os_xml,
+                         const ArrayOfSpectralSingleScatteringData& asssdata,
+                         bofstream* pbofs,
+                         const String& name,
+                         const Verbosity& verbosity) {
+  ArtsXMLTag open_tag(verbosity);
+  ArtsXMLTag close_tag(verbosity);
+
+  open_tag.set_name("Array");
+  if (name.length()) open_tag.add_attribute("name", name);
+
+  open_tag.add_attribute("type", "SpectralSingleScatteringData");
+  open_tag.add_attribute("nelem", asssdata.nelem());
+
+  open_tag.write_to_stream(os_xml);
+  os_xml << '\n';
+
+  for (Index n = 0; n < asssdata.nelem(); n++)
+    xml_write_to_stream(os_xml, asssdata[n], pbofs, "", verbosity);
+
+  close_tag.set_name("/Array");
+  close_tag.write_to_stream(os_xml);
+
+  os_xml << '\n';
+}
+
 //=== ArrayOfArrayOfSingleScatteringData===========================================
 
 //! Reads ArrayOfArrayOfSingleScatteringData from XML input stream
@@ -1706,6 +1777,78 @@ void xml_write_to_stream(ostream& os_xml,
 
   for (Index n = 0; n < assdata.nelem(); n++)
     xml_write_to_stream(os_xml, assdata[n], pbofs, "", verbosity);
+
+  close_tag.set_name("/Array");
+  close_tag.write_to_stream(os_xml);
+
+  os_xml << '\n';
+}
+
+//=== ArrayOfArrayOfSpectralSingleScatteringData===========================================
+
+//! Reads ArrayOfArrayOfSpectralSingleScatteringData from XML input stream
+/*!
+  \param is_xml   XML Input stream
+  \param asssdata  ArrayOfArrayOfSpectralSingleScatteringData return value
+  \param pbifs    Pointer to binary input stream. NULL in case of ASCII file.
+*/
+void xml_read_from_stream(istream& is_xml,
+                          ArrayOfArrayOfSpectralSingleScatteringData& asssdata,
+                          bifstream* pbifs,
+                          const Verbosity& verbosity) {
+  ArtsXMLTag tag(verbosity);
+  Index nelem;
+
+  tag.read_from_stream(is_xml);
+  tag.check_name("Array");
+  tag.check_attribute("type", "ArrayOfSpectralSingleScatteringData");
+
+  tag.get_attribute_value("nelem", nelem);
+  asssdata.resize(nelem);
+
+  Index n;
+  try {
+    for (n = 0; n < nelem; n++)
+      xml_read_from_stream(is_xml, asssdata[n], pbifs, verbosity);
+  } catch (runtime_error e) {
+    ostringstream os;
+    os << "Error reading ArrayOfArrayOfSpectralSingleScatteringData: "
+       << "\n Element: " << n << "\n"
+       << e.what();
+    throw runtime_error(os.str());
+  }
+
+  tag.read_from_stream(is_xml);
+  tag.check_name("/Array");
+}
+
+//! Writes ArrayOfArrayOfSpectralSingleScatteringData to XML output stream
+/*!
+  \param os_xml   XML Output stream
+  \param asssdata  ArrayOfArrayOfSpectralSingleScatteringData
+  \param pbofs    Pointer to binary file stream. NULL for ASCII output.
+  \param name     Optional name attribute
+*/
+void xml_write_to_stream(
+    ostream& os_xml,
+    const ArrayOfArrayOfSpectralSingleScatteringData& asssdata,
+    bofstream* pbofs,
+    const String& name,
+    const Verbosity& verbosity) {
+  ArtsXMLTag open_tag(verbosity);
+  ArtsXMLTag close_tag(verbosity);
+
+  open_tag.set_name("Array");
+  if (name.length()) open_tag.add_attribute("name", name);
+
+  open_tag.add_attribute("type", "ArrayOfSpecrtalSingleScatteringData");
+  open_tag.add_attribute("nelem", asssdata.nelem());
+
+  open_tag.write_to_stream(os_xml);
+  os_xml << '\n';
+
+  for (Index n = 0; n < asssdata.nelem(); n++)
+    xml_write_to_stream(os_xml, asssdata[n], pbofs, "", verbosity);
 
   close_tag.set_name("/Array");
   close_tag.write_to_stream(os_xml);

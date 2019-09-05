@@ -96,6 +96,44 @@ ostream& operator<<(ostream& os, const SingleScatteringData& ssd);
 ostream& operator<<(ostream& os, const ArrayOfSingleScatteringData& assd);
 
 /*===========================================================================
+  === The SpectralSingleScatteringData structure
+  ===========================================================================*/
+
+/*!
+   Structure which describes the single scattering properties of a scattering
+   element (a single particle or a particle bulk) in a spectral representation.
+
+   The fields of the structure are described in the ARTS user guide (AUG).
+   It is listed as a sub-entry to "data structures".
+*/
+struct SpectralSingleScatteringData {
+  PType ptype;
+  String description;
+  Vector f_grid;
+  Vector T_grid;
+  Matrix coeff_inc;
+  Matrix coeff_sca;
+  Tensor5 pha_mat_data_real;
+  Tensor5 pha_mat_data_imag;
+  Tensor4 ext_mat_data_real;
+  Tensor4 ext_mat_data_imag;
+  Tensor4 abs_vec_data_real;
+  Tensor4 abs_vec_data_imag;
+  Tensor4 forward_peak_data_real;
+  Tensor4 forward_peak_data_imag;
+  Tensor4 backward_peak_data_real;
+  Tensor4 backward_peak_data_imag;
+};
+
+typedef Array<SpectralSingleScatteringData> ArrayOfSpectralSingleScatteringData;
+typedef Array<Array<SpectralSingleScatteringData> >
+    ArrayOfArrayOfSpectralSingleScatteringData;
+
+ostream& operator<<(ostream& os, const SpectralSingleScatteringData& ssd);
+ostream& operator<<(ostream& os,
+                    const ArrayOfSpectralSingleScatteringData& assd);
+
+/*===========================================================================
   === The ScatteringMetaData structure
   ===========================================================================*/
 /*!
@@ -158,6 +196,19 @@ void opt_prop_NScatElems(  //Output
     const Index& f_index,
     const Index& t_interp_order = 1);
 
+void opt_prop_NScatElemsSpectral(  //Output
+    ArrayOfArrayOfTensor5& ext_mat,
+    ArrayOfArrayOfTensor4& abs_vec,
+    ArrayOfArrayOfIndex& ptypes,
+    Matrix& t_ok,
+    bool& any_m,
+    //Input
+    const ArrayOfArrayOfSpectralSingleScatteringData& scat_data_spectral,
+    const Index& stokes_dim,
+    const Vector& T_array,
+    const Index& f_index,
+    const Index& t_interp_order = 1);
+
 void opt_prop_1ScatElem(  //Output
     Tensor5View ext_mat,
     Tensor4View abs_vec,
@@ -167,6 +218,17 @@ void opt_prop_1ScatElem(  //Output
     const SingleScatteringData& ssd,
     const Vector& T_array,
     const Matrix& dir_array,
+    const Index& f_index,
+    const Index& t_interp_order = 1);
+
+void opt_prop_1ScatElemSpectral(  //Output
+    Tensor5View ext_mat,
+    Tensor4View abs_vec,
+    Index& ptype,
+    VectorView t_ok,
+    //Input
+    const SpectralSingleScatteringData& ssd,
+    const Vector& T_array,
     const Index& f_index,
     const Index& t_interp_order = 1);
 
@@ -213,6 +275,20 @@ void pha_mat_NScatElems(  //Output
     const Index& f_index,
     const Index& t_interp_order = 1);
 
+void pha_mat_NScatElemsSpectral(  //Output
+    ArrayOfArrayOfTensor6& pha_mat_real,
+    ArrayOfArrayOfTensor6& pha_mat_imag,
+    ArrayOfArrayOfIndex& ptypes,
+    Matrix& t_ok,
+    bool& any_m_inc,
+    bool& any_m_sca,
+    //Input
+    const ArrayOfArrayOfSpectralSingleScatteringData& scat_data_spectral,
+    const Index& stokes_dim,
+    const Vector& T_array,
+    const Index& f_index,
+    const Index& t_interp_order = 1);
+
 void pha_mat_1ScatElem(  //Output
     Tensor6View pha_mat,
     Index& ptype,
@@ -223,6 +299,18 @@ void pha_mat_1ScatElem(  //Output
     const Matrix& pdir_array,
     const Matrix& idir_array,
     const Index& f_start,
+    const Index& t_interp_order = 1);
+
+void pha_mat_1ScatElemSpectral(  //Output
+    Tensor6View pha_mat_real,
+    Tensor6View pha_mat_imag,
+    Index& ptype,
+    VectorView t_ok,
+    //Input
+    const SpectralSingleScatteringData& ssd,
+    const Vector& T_array,
+    const Index& f_index,
+    const bool& any_m_sca,
     const Index& t_interp_order = 1);
 
 void FouComp_1ScatElem(  //Output

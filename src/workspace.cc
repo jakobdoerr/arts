@@ -3948,6 +3948,20 @@ void Workspace::define_wsv_data() {
       GROUP("ArrayOfArrayOfSingleScatteringData")));
 
   wsv_data.push_back(WsvRecord(
+      NAME("scat_data_spectral"),
+      DESCRIPTION(
+          "Array of spectral single scattering data.\n"
+          "\n"
+          "As *scat_data_spectral_raw*, but with frequency grids and dimensions reduced\n"
+          "to the RT's *f_grid* or a single frequency entry. Also, temperature\n"
+          "grid or dimensions can be reduced to a single entry, meaning no\n"
+          "temperature interpolation is done for the respective data.\n"
+          "\n"
+          "Standard approach to derive scat_data_spectral is to use \n"
+          "*scat_data_specrtalCalc* to derive it from *scat_data_spectral_raw*."),
+      GROUP("ArrayOfArrayOfSpectralSingleScatteringData")));
+
+  wsv_data.push_back(WsvRecord(
       NAME("scat_data_checked"),
       DESCRIPTION(
           "OK-flag for *scat_data*.\n"
@@ -3990,6 +4004,45 @@ void Workspace::define_wsv_data() {
           "\n"
           "Dimensions: [number of scattering species][number of scattering elements] \n"),
       GROUP("ArrayOfArrayOfSingleScatteringData")));
+
+  wsv_data.push_back(WsvRecord(
+      NAME("scat_data_spectral_raw"),
+      DESCRIPTION(
+          "Array of raw spectral single scattering data.\n"
+          "\n"
+          "This variable holds the spectral single scattering properties for all \n"
+          "scattering elements, organized according to their assignment to a\n"
+          "scattering species. *scat_data_spectral_raw* entries can be derived from\n"
+          "precalculated data files using the methods *ScatElementsPndAndScatAddSpectral*,\n"
+          "*ScatSpeciesPndAndScatAddSpectral*, or *ScatSpeciesScatAndMetaReadSpectral* or\n"
+          "can be calculated using *scat_data_singleTmatrix*.\n"
+          "\n"
+          "This may be used in combination with *scat_meta*\n"
+          "\n"
+          "Usage: Method ouput.\n"
+          "\n"
+          "Members: SpectralSingleScatteringData:\n"
+          "  Enum[ptype attribute]\n"
+          "  String[description] \n"
+          "  Vector[f_grid]\n"
+          "  Vector[T_grid]\n"
+          "  Matrix[coeff_inc]"
+          "  Matrix[coeff_sca]"
+          "  Tensor5[pha_mat_data]\n"
+          "      [f_grid, T_grid, coeff_inc, coeff_inc, matrix_element]\n"
+          "                       ^^^^^^^^^  ^^^^^^^^^\n"
+          "                       scattered   incoming\n"
+          "  Tensor4[ext_mat_data]\n"
+          "      [f_grid, T_grid, coeff_inc, matrix_element]\n"
+          "  Tensor4[abs_vec_data]\n"
+          "      [f_grid, T_grid, coeff_inc, matrix_element]\n"
+          "  Tensor4[forward_peak_data]\n"
+          "      [f_grid, T_grid, coeff_inc, matrix_element]\n"
+          "  Tensor4[packward_peak_data]\n"
+          "      [f_grid, T_grid, coeff_inc, matrix_element]\n"
+          "\n"
+          "Dimensions: [number of scattering species][number of scattering elements] \n"),
+      GROUP("ArrayOfArrayOfSpectralSingleScatteringData")));
 
   wsv_data.push_back(WsvRecord(
       NAME("scat_data_mono"),

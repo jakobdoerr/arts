@@ -95,6 +95,7 @@ void define_wsv_group_names() {
   wsv_group_names.push_back("ArrayOfArrayOfRadiationVector");
   wsv_group_names.push_back("ArrayOfArrayOfScatteringMetaData");
   wsv_group_names.push_back("ArrayOfArrayOfSingleScatteringData");
+  wsv_group_names.push_back("ArrayOfArrayOfSpectralSingleScatteringData");
   wsv_group_names.push_back("ArrayOfArrayOfSpeciesTag");
   wsv_group_names.push_back("ArrayOfArrayOfStokesVector");
   wsv_group_names.push_back("ArrayOfArrayOfString");
@@ -117,6 +118,7 @@ void define_wsv_group_names() {
   wsv_group_names.push_back("ArrayOfRetrievalQuantity");
   wsv_group_names.push_back("ArrayOfScatteringMetaData");
   wsv_group_names.push_back("ArrayOfSingleScatteringData");
+  wsv_group_names.push_back("ArrayOfSpectralSingleScatteringData");
   wsv_group_names.push_back("ArrayOfSparse");
   wsv_group_names.push_back("ArrayOfStokesVector");
   wsv_group_names.push_back("ArrayOfString");
@@ -150,6 +152,7 @@ void define_wsv_group_names() {
   wsv_group_names.push_back("Rational");
   wsv_group_names.push_back("ScatteringMetaData");
   wsv_group_names.push_back("SingleScatteringData");
+  wsv_group_names.push_back("SpectralSingleScatteringData");
   wsv_group_names.push_back("Sparse");
   wsv_group_names.push_back("SpeciesAuxData");
   wsv_group_names.push_back("StokesVector");

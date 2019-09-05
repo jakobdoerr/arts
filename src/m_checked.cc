@@ -731,6 +731,270 @@ void cloudbox_checkedCalc(Index& cloudbox_checked,
 }
 
 /* Workspace method: Doxygen documentation will be auto-generated */
+void cloudbox_checkedCalcSpectral(
+    Index& cloudbox_checked,
+    const Index& atmfields_checked,
+    const Index& atmosphere_dim,
+    const Vector& p_grid,
+    const Vector& lat_grid,
+    const Vector& lon_grid,
+    const Tensor3& z_field,
+    const Matrix& z_surface,
+    const Tensor3& wind_u_field,
+    const Tensor3& wind_v_field,
+    const Tensor3& wind_w_field,
+    const Index& cloudbox_on,
+    const ArrayOfIndex& cloudbox_limits,
+    const Tensor4& pnd_field,
+    const ArrayOfTensor4& dpnd_field_dx,
+    const ArrayOfRetrievalQuantity& jacobian_quantities,
+    const ArrayOfArrayOfSpectralSingleScatteringData& scat_data_spectral,
+    const ArrayOfString& scat_species,
+    const Matrix& particle_masses,
+    const ArrayOfArrayOfSpeciesTag& abs_species,
+    const Index& negative_pnd_ok,
+    const Verbosity&) {
+  if (atmfields_checked != 1)
+    throw runtime_error(
+        "The atmospheric fields must be flagged to have "
+        "passed a consistency check (atmfields_checked=1).");
+
+  chk_if_bool("cloudbox_on", cloudbox_on);
+
+  if (cloudbox_on) {
+    // Winds, must be empty variables (i.e. no winds allowed)
+    {
+      ostringstream ow;
+      ow << "The scattering methods are not (yet?) handling winds. For this\n"
+         << "reason, the WSVs for wind fields must all be empty with an\n."
+         << "active cloudbox.";
+      if (wind_w_field.npages() > 0) {
+        throw runtime_error(ow.str());
+      }
+      if (wind_v_field.npages() > 0) {
+        throw runtime_error(ow.str());
+      }
+      if (atmosphere_dim > 2 && wind_u_field.npages() > 0) {
+        throw runtime_error(ow.str());
+      }
+    }
+
+    // no "particles" in abs_species if cloudbox is on (they act on the same
+    // scat_data! and there is no good reason to have some particles as
+    // abs-only, if we anyway do a scattering calculation.).
+    Index has_absparticles = 0;
+    for (Index sp = 0; sp < abs_species.nelem() && has_absparticles < 1; sp++) {
+      if (abs_species[sp][0].Type() == SpeciesTag::TYPE_PARTICLES) {
+        has_absparticles = 1;
+      }
+    }
+    if (has_absparticles) {
+      throw runtime_error(
+          "For scattering calculations (cloudbox is on),"
+          "abs_species is not allowed to contain\n"
+          "'particles' (absorbing-only particles)!");
+    }
+
+    // Cloudbox limits
+    if (cloudbox_limits.nelem() != atmosphere_dim * 2) {
+      ostringstream os;
+      os << "The array *cloudbox_limits* has incorrect length.\n"
+         << "For atmospheric dim. = " << atmosphere_dim
+         << " the length shall be " << atmosphere_dim * 2 << " but it is "
+         << cloudbox_limits.nelem() << ".";
+      throw runtime_error(os.str());
+    }
+    if (cloudbox_limits[1] <= cloudbox_limits[0] || cloudbox_limits[0] < 0 ||
+        cloudbox_limits[1] >= p_grid.nelem()) {
+      ostringstream os;
+      os << "Incorrect value(s) for cloud box pressure limit(s) found."
+         << "\nValues are either out of range or upper limit is not "
+         << "greater than lower limit.\nWith present length of "
+         << "*p_grid*, OK values are 0 - " << p_grid.nelem() - 1
+         << ".\nThe pressure index limits are set to " << cloudbox_limits[0]
+         << " - " << cloudbox_limits[1] << ".";
+      throw runtime_error(os.str());
+    }
+
+    Index nlat = 1, nlon = 1;
+
+    if (atmosphere_dim > 1) {
+      nlat = lat_grid.nelem();
+      if (cloudbox_limits[3] <= cloudbox_limits[2] || cloudbox_limits[2] < 1 ||
+          cloudbox_limits[3] >= nlat - 1) {
+        ostringstream os;
+        os << "Incorrect value(s) for cloud box latitude limit(s) found."
+           << "\nValues are either out of range or upper limit is not "
+           << "greater than lower limit.\nWith present length of "
+           << "*lat_grid*, OK values are 1 - " << nlat - 2
+           << ".\nThe latitude index limits are set to " << cloudbox_limits[2]
+           << " - " << cloudbox_limits[3] << ".";
+        throw runtime_error(os.str());
+      }
+      if ((lat_grid[cloudbox_limits[2]] - lat_grid[0] < LAT_LON_MIN) &&
+          (atmosphere_dim == 2 || (atmosphere_dim == 3 && lat_grid[0] > -90))) {
+        ostringstream os;
+        os << "Too small distance between cloudbox and lower end of "
+           << "latitude grid.\n"
+           << "This distance must be " << LAT_LON_MIN << " degrees.\n"
+           << "Cloudbox ends at " << lat_grid[cloudbox_limits[2]]
+           << " and latitude grid starts at " << lat_grid[0] << ".";
+        throw runtime_error(os.str());
+      }
+      if ((lat_grid[nlat - 1] - lat_grid[cloudbox_limits[3]] < LAT_LON_MIN) &&
+          (atmosphere_dim == 2 ||
+           (atmosphere_dim == 3 && lat_grid[nlat - 1] < 90))) {
+        ostringstream os;
+        os << "Too small distance between cloudbox and upper end of "
+           << "latitude grid.\n"
+           << "This distance must be " << LAT_LON_MIN << " degrees.\n"
+           << "Cloudbox ends at " << lat_grid[cloudbox_limits[3]]
+           << " and latitude grid ends at " << lat_grid[nlat - 1] << ".";
+        throw runtime_error(os.str());
+      }
+    }
+
+    if (atmosphere_dim > 2) {
+      nlon = lon_grid.nelem();
+      if (cloudbox_limits[5] <= cloudbox_limits[4] || cloudbox_limits[4] < 1 ||
+          cloudbox_limits[5] >= nlon - 1) {
+        ostringstream os;
+        os << "Incorrect value(s) for cloud box longitude limit(s) found"
+           << ".\nValues are either out of range or upper limit is not "
+           << "greater than lower limit.\nWith present length of "
+           << "*lon_grid*, OK values are 1 - " << nlon - 2
+           << ".\nThe longitude limits are set to " << cloudbox_limits[4]
+           << " - " << cloudbox_limits[5] << ".";
+        throw runtime_error(os.str());
+      }
+      if (lon_grid[nlon - 1] - lon_grid[0] < 360) {
+        const Numeric latmax = max(abs(lat_grid[cloudbox_limits[2]]),
+                                   abs(lat_grid[cloudbox_limits[3]]));
+        const Numeric lfac = 1 / cos(DEG2RAD * latmax);
+        if (lon_grid[cloudbox_limits[4]] - lon_grid[0] < LAT_LON_MIN / lfac) {
+          ostringstream os;
+          os << "Too small distance between cloudbox and lower end of"
+             << "the longitude\ngrid. This distance must here be "
+             << LAT_LON_MIN / lfac << " degrees.";
+          throw runtime_error(os.str());
+        }
+        if (lon_grid[nlon - 1] - lon_grid[cloudbox_limits[5]] <
+            LAT_LON_MIN / lfac) {
+          ostringstream os;
+          os << "Too small distance between cloudbox and upper end of"
+             << "the longitude\ngrid. This distance must here be "
+             << LAT_LON_MIN / lfac << " degrees.";
+          throw runtime_error(os.str());
+        }
+      }
+    }
+
+    // Check with respect to z_surface
+    for (Index o = 0; o < nlon; o++) {
+      for (Index a = 0; a < nlat; a++) {
+        if (z_field(cloudbox_limits[1], a, o) <= z_surface(a, o))
+          throw runtime_error(
+              "The upper vertical limit of the cloudbox must be above "
+              "the surface altitude (for all latitudes and longitudes).");
+      }
+    }
+
+    // Check pnd_field
+    //
+    const Index np = TotalNumberOfElements(scat_data_spectral);
+    // Dummy variables to mimic grids of correct size
+    Vector g1(cloudbox_limits[1] - cloudbox_limits[0] + 1), g2(0), g3(0);
+    if (atmosphere_dim > 1) {
+      g2.resize(cloudbox_limits[3] - cloudbox_limits[2] + 1);
+    }
+    if (atmosphere_dim > 2) {
+      g3.resize(cloudbox_limits[5] - cloudbox_limits[4] + 1);
+    }
+
+    chk_atm_field("pnd_field", pnd_field, atmosphere_dim, np, g1, g2, g3);
+
+    if (!negative_pnd_ok && min(pnd_field) < 0)
+      throw runtime_error("Negative values in *pnd_field* not allowed.");
+
+    // No non-zero pnd at lower boundary unless lower boundary is at or below
+    // surface
+    for (Index a = 0; a < g2.nelem(); a++) {
+      for (Index o = 0; o < g3.nelem(); o++) {
+        if (max(pnd_field(joker, 0, a, o)) > 0 &&
+            z_field(cloudbox_limits[0], a, o) > z_surface(a, o))
+          throw runtime_error(
+              "A non-zero value found in *pnd_field* at the"
+              " lower altitude limit of the cloudbox (but the "
+              "position is not at or below the surface altitude).");
+      }
+    }
+
+    // No non-zero pnd at upper boundary unless upper boundary is top of
+    // atmosphere
+    if (cloudbox_limits[1] != p_grid.nelem() - 1)
+      if (max(pnd_field(joker, g1.nelem() - 1, joker, joker)) > 0)
+        throw runtime_error(
+            "A non-zero value found in *pnd_field* at "
+            "upper altitude limit of the cloudbox.");
+    if (atmosphere_dim >= 2) {
+      if (max(pnd_field(joker, joker, 0, joker)) > 0)
+        throw runtime_error(
+            "A non-zero value found in *pnd_field* at "
+            "lower latitude limit of the cloudbox.");
+      if (max(pnd_field(joker, joker, g2.nelem() - 1, joker)) > 0)
+        throw runtime_error(
+            "A non-zero value found in *pnd_field* at "
+            "upper latitude limit of the cloudbox.");
+    }
+    if (atmosphere_dim == 3) {
+      if (max(pnd_field(joker, joker, joker, 0)) > 0)
+        throw runtime_error(
+            "A non-zero value found in *pnd_field* at "
+            "lower longitude limit of the cloudbox.");
+      if (max(pnd_field(joker, joker, joker, g3.nelem() - 1)) > 0)
+        throw runtime_error(
+            "A non-zero value found in *pnd_field* at "
+            "upper longitude limit of the cloudbox.");
+    }
+
+    // And dpnd_field_dx
+    if (dpnd_field_dx.nelem() != jacobian_quantities.nelem())
+      throw runtime_error(
+          "Size of *dpnd_field_dx* inconsistent with number "
+          "of *jacobian_quantities*.");
+
+    // Check semi-mandatory variables, that are allowed to be empty
+    //
+
+    // scat_species:
+    if (scat_species.nelem() > 0)
+      if (scat_species.nelem() != scat_data_spectral.nelem()) {
+        ostringstream os;
+        os << "Number of scattering species specified by scat_species does\n"
+           << "not agree with number of scattering species in scat_data:\n"
+           << "scat_species has " << scat_species.nelem()
+           << " entries, while scat_data has " << scat_data_spectral.nelem()
+           << ".";
+        throw runtime_error(os.str());
+      }
+
+    // particle_masses:
+    if (!particle_masses.empty()) {
+      if (particle_masses.nrows() != np)
+        throw runtime_error(
+            "The WSV *particle_masses* must either be "
+            "empty or have a row size matching the "
+            "length of *scat_data*.");
+      if (min(particle_masses) < 0)
+        throw runtime_error("All values in *particles_masses* must be >= 0.");
+    }
+  }
+
+  // If here, all OK
+  cloudbox_checked = 1;
+}
+
+/* Workspace method: Doxygen documentation will be auto-generated */
 void scat_data_checkedCalc(Index& scat_data_checked,
                            const ArrayOfArrayOfSingleScatteringData& scat_data,
                            const Vector& f_grid,
@@ -878,6 +1142,265 @@ void scat_data_checkedCalc(Index& scat_data_checked,
     // 1) & 2) always done
     // 3) only done if scat_data_check_level is "all"
     scat_dataCheck(scat_data, check_level, sca_mat_threshold, verbosity);
+  }
+
+  // If here, all OK
+  scat_data_checked = 1;
+}
+
+/* Workspace method: Doxygen documentation will be auto-generated */
+void scat_data_checkedCalcSpectral(
+    Index& scat_data_checked,
+    const ArrayOfArrayOfSpectralSingleScatteringData& scat_data_spectral,
+    const Vector& f_grid,
+    const Numeric& dfrel_threshold,
+    const String& check_level,
+    const Verbosity& verbosity)
+// FIXME: when we allow K, a, Z to be on different f and T grids, their use in
+// the scatt solvers needs to be reviewed again and adapted to this!
+{
+  // Prevent the user from producing nonsense by using too much freedom in
+  // setting the single freq validity threshold...
+  if (dfrel_threshold > 0.5) {
+    ostringstream os;
+    os << "*dfrel_threshold* too large (max. allowed: 0.5, your's: "
+       << dfrel_threshold << ").";
+    throw runtime_error(os.str());
+  }
+
+  // freq range of calc covered?
+  if (f_grid.empty()) throw runtime_error("The frequency grid is empty.");
+  if (f_grid.nelem() > 1) chk_if_increasing("f_grid", f_grid);
+
+  Index nf = f_grid.nelem();
+  Index N_ss = scat_data_spectral.nelem();
+  for (Index i_ss = 0; i_ss < N_ss; i_ss++) {
+    Index N_se = scat_data_spectral[i_ss].nelem();
+    for (Index i_se = 0; i_se < N_se; i_se++) {
+      // For each scattering element (se) check that se's f_grid is either
+      // identical to f_grid or contains a single entry only. In the latter
+      // case, the f/f_grid-ratio (equv. to a size parameter ratio) not allowed
+      // to exceed the dfrel_threshold.
+      Index nf_se = scat_data_spectral[i_ss][i_se].f_grid.nelem();
+      if (nf_se != 1) {
+        if (nf_se != nf) {
+          ostringstream os;
+          os << "*scat_data_spectral* must have either one or *f_grid* (=" << nf
+             << ") frequency entries,\n"
+             << "but scattering element #" << i_se << " in scattering species #"
+             << i_ss << " has " << nf_se << ".";
+          throw runtime_error(os.str());
+        } else {
+          for (Index f = 0; f < nf_se; f++) {
+            if (!is_same_within_epsilon(
+                    scat_data_spectral[i_ss][i_se].f_grid[f],
+                    f_grid[f],
+                    0.5e-9)) {
+              ostringstream os;
+              os << "*scat_data_spectral* frequency grid has to be identical to *f_grid*\n"
+                 << "(or contain only a single entry),\n"
+                 << "but scattering element #" << i_se
+                 << " in scattering species #" << i_ss
+                 << " deviates for f_index " << f << ".";
+              throw runtime_error(os.str());
+            }
+          }
+        }
+      } else {
+        if ((abs(1. - scat_data_spectral[i_ss][i_se].f_grid[0] / f_grid[0]) >
+             dfrel_threshold) or
+            (abs(1. - scat_data_spectral[i_ss][i_se].f_grid[0] /
+                          f_grid[nf - 1]) > dfrel_threshold)) {
+          ostringstream os;
+          os << "Frequency entry (f="
+             << scat_data_spectral[i_ss][i_se].f_grid[0]
+             << "Hz) of scattering element #" << i_se << "\n"
+             << "in scattering species #" << i_ss << " is too far (>"
+             << dfrel_threshold * 1e2 << "%) from one or more\n"
+             << "of the f_grid limits (fmin=" << f_grid[0]
+             << "Hz, fmax=" << f_grid[nf - 1] << "Hz).";
+          throw runtime_error(os.str());
+        }
+      }
+
+      // check that the freq dimension of sca_mat, ext_mat, and abs_vec is
+      // either ssd.f_grid.nelem() or 1 (FIXME: so far, being freq dim !=
+      // ssd.f_grid.nelem() switched off, as usage in scatt solvers so far
+      // doesn't allow this. see FIXME at start.).
+      {
+        // Real data
+        ostringstream bs1, bs2, bs2complx;
+        bs1 << "Frequency dimension of ";
+        bs2complx << " must be either one and/or ssd.f_grid.nelem() (=" << nf_se
+                  << "),\n";
+        bs2 << " must be ssd.f_grid.nelem() (=" << nf_se << "),\n"
+            << "but scattering element #" << i_se << " in scattering species #"
+            << i_ss << " is ";
+        Index nf_sd =
+            scat_data_spectral[i_ss][i_se].pha_mat_data_real.nshelves();
+        if (nf_sd != nf_se)  //&& nf_sd != 1)
+        {
+          ostringstream os;
+          os << bs1.str() << "pha_mat_data_real" << bs2.str() << nf_sd << ".";
+          throw runtime_error(os.str());
+        }
+        nf_sd = scat_data_spectral[i_ss][i_se].ext_mat_data_real.nbooks();
+        if (nf_sd != nf_se)  //&& nf_sd != 1)
+        {
+          ostringstream os;
+          os << bs1.str() << "ext_mat_data_real" << bs2.str() << nf_sd << ".";
+          throw runtime_error(os.str());
+        }
+        nf_sd = scat_data_spectral[i_ss][i_se].abs_vec_data_real.nbooks();
+        if (nf_sd != nf_se)  //&& nf_sd != 1)
+        {
+          ostringstream os;
+          os << bs1.str() << "abs_vec_data_real" << bs2.str() << nf_sd << ".";
+          throw runtime_error(os.str());
+        }
+        nf_sd = scat_data_spectral[i_ss][i_se].forward_peak_data_real.nbooks();
+        if (nf_sd != nf_se)  //&& nf_sd != 1)
+        {
+          ostringstream os;
+          os << bs1.str() << "forward_peak_data_real" << bs2.str() << nf_sd
+             << ".";
+          throw runtime_error(os.str());
+        }
+        nf_sd = scat_data_spectral[i_ss][i_se].backward_peak_data_real.nbooks();
+        if (nf_sd != nf_se)  //&& nf_sd != 1)
+        {
+          ostringstream os;
+          os << bs1.str() << "backward_peak_data_real" << bs2.str() << nf_sd
+             << ".";
+          throw runtime_error(os.str());
+        }
+        // Imaginary data
+        nf_sd = scat_data_spectral[i_ss][i_se].pha_mat_data_imag.nshelves();
+        if (nf_sd != nf_se && nf_sd != 1) {
+          ostringstream os;
+          os << bs1.str() << "pha_mat_data_imag" << bs2complx.str() << nf_sd
+             << ".";
+          throw runtime_error(os.str());
+        }
+        nf_sd = scat_data_spectral[i_ss][i_se].ext_mat_data_imag.nbooks();
+        if (nf_sd != nf_se && nf_sd != 1) {
+          ostringstream os;
+          os << bs1.str() << "ext_mat_data_imag" << bs2complx.str() << nf_sd
+             << ".";
+          throw runtime_error(os.str());
+        }
+        nf_sd = scat_data_spectral[i_ss][i_se].abs_vec_data_imag.nbooks();
+        if (nf_sd != nf_se && nf_sd != 1) {
+          ostringstream os;
+          os << bs1.str() << "abs_vec_data_imag" << bs2complx.str() << nf_sd
+             << ".";
+          throw runtime_error(os.str());
+        }
+        nf_sd = scat_data_spectral[i_ss][i_se].forward_peak_data_imag.nbooks();
+        if (nf_sd != nf_se && nf_sd != 1) {
+          ostringstream os;
+          os << bs1.str() << "forward_peak_data_imag" << bs2complx.str()
+             << nf_sd << ".";
+          throw runtime_error(os.str());
+        }
+        nf_sd = scat_data_spectral[i_ss][i_se].backward_peak_data_imag.nbooks();
+        if (nf_sd != nf_se && nf_sd != 1) {
+          ostringstream os;
+          os << bs1.str() << "backward_peak_data_imag" << bs2complx.str()
+             << nf_sd << ".";
+          throw runtime_error(os.str());
+        }
+      }
+
+      // check that the temp dimension of K and a is ssd.T_grid.nelem(). For Z
+      // it might be ssd.T_grid.nelem() or 1.
+      {
+        ostringstream bs1, bs2;
+        Index nt_se = scat_data_spectral[i_ss][i_se].T_grid.nelem();
+        bs1 << "Temperature dimension of ";
+        //bs2 << " must be either one or ssd.T_grid.nelem(),\n"
+        bs2 << " must be ssd.T_grid.nelem() (=" << nt_se << "),\n"
+            << "but for scattering element #" << i_se
+            << " in scattering species #" << i_ss << " it is ";
+        Index nt_sd = scat_data_spectral[i_ss][i_se].pha_mat_data_real.nbooks();
+        if (nt_sd != nt_se and nt_sd != 1) {
+          ostringstream os;
+          os << bs1.str() << "pha_mat_data_real" << bs2.str() << nt_sd << ".";
+          throw runtime_error(os.str());
+        }
+        nt_sd = scat_data_spectral[i_ss][i_se].ext_mat_data_real.npages();
+        if (nt_sd != nt_se)  // no need to check for 1 here. since if it is 1,
+                             // also T_grid.nelem need to be 1
+        {
+          ostringstream os;
+          os << bs1.str() << "ext_mat_data_real" << bs2.str() << nt_sd << ".";
+          throw runtime_error(os.str());
+        }
+        nt_sd = scat_data_spectral[i_ss][i_se].abs_vec_data_real.npages();
+        if (nt_sd != nt_se) {
+          ostringstream os;
+          os << bs1.str() << "abs_vec_data_real" << bs2.str() << nt_sd << ".";
+          throw runtime_error(os.str());
+        }
+        nt_sd = scat_data_spectral[i_ss][i_se].forward_peak_data_real.npages();
+        if (nt_sd != nt_se) {
+          ostringstream os;
+          os << bs1.str() << "forward_peak_data_real" << bs2.str() << nt_sd
+             << ".";
+          throw runtime_error(os.str());
+        }
+        nt_sd = scat_data_spectral[i_ss][i_se].backward_peak_data_real.npages();
+        if (nt_sd != nt_se) {
+          ostringstream os;
+          os << bs1.str() << "backward_peak_data_real" << bs2.str() << nt_sd
+             << ".";
+          throw runtime_error(os.str());
+        }
+        // Imaginary data
+        nt_sd = scat_data_spectral[i_ss][i_se].pha_mat_data_imag.nbooks();
+        if (nt_sd != nt_se && nt_sd != 1) {
+          ostringstream os;
+          os << bs1.str() << "pha_mat_data_imag" << bs2.str() << nt_sd << ".";
+          throw runtime_error(os.str());
+        }
+        nt_sd = scat_data_spectral[i_ss][i_se].ext_mat_data_imag.npages();
+        if (nt_sd != nt_se && nt_sd != 1) {
+          ostringstream os;
+          os << bs1.str() << "ext_mat_data_imag" << bs2.str() << nt_sd << ".";
+          throw runtime_error(os.str());
+        }
+        nt_sd = scat_data_spectral[i_ss][i_se].abs_vec_data_imag.npages();
+        if (nt_sd != nt_se && nt_sd != 1) {
+          ostringstream os;
+          os << bs1.str() << "abs_vec_data_imag" << bs2.str() << nt_sd << ".";
+          throw runtime_error(os.str());
+        }
+        nt_sd = scat_data_spectral[i_ss][i_se].forward_peak_data_imag.npages();
+        if (nt_sd != nt_se && nt_sd != 1) {
+          ostringstream os;
+          os << bs1.str() << "forward_peak_data_imag" << bs2.str() << nt_sd
+             << ".";
+          throw runtime_error(os.str());
+        }
+        nt_sd = scat_data_spectral[i_ss][i_se].backward_peak_data_imag.npages();
+        if (nt_sd != nt_se && nt_sd != 1) {
+          ostringstream os;
+          os << bs1.str() << "backward_peak_data_imag" << bs2.str() << nt_sd
+             << ".";
+          throw runtime_error(os.str());
+        }
+      }
+    }
+  }
+
+  if (check_level.toupper() != "NONE") {
+    // handing over to scat_dataCheck which checks whether
+    // 1) scat_data containing any NaN?
+    // 2) any negative values in Z11, K11, or a1?
+    // 3) sca_mat norm sufficiently good (int(Z11)~=K11-a1?)
+    // 1) & 2) always done
+    // 3) only done if scat_data_check_level is "all"
+    scat_data_spectralCheck(scat_data_spectral, check_level, verbosity);
   }
 
   // If here, all OK

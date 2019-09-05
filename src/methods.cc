@@ -3820,6 +3820,62 @@ void define_md_data_raw() {
       GIN_DESC("Flag whether to accept pnd_field < 0.")));
 
   md_data_raw.push_back(MdRecord(
+      NAME("cloudbox_checkedCalcSpectral"),
+      DESCRIPTION(
+          "Checks consistency and validity of the cloudbox governing variables.\n"
+          "\n"
+          "The following WSVs are treated: *cloudbox_on*, *cloudbox_limits*,\n"
+          "*pnd_field*, *scat_data_spectral*, *scat_species*, *abs_species*, \n"
+          "*particle_masses*\n"
+          "*particle_bulkprop_field*, *particle_bulkprop_names* and wind_u/v/w_field.\n"
+          "\n"
+          "If any of these variables is changed, then this method shall be\n"
+          "called again (no automatic check that this is fulfilled!).\n"
+          "\n"
+          "The main checks are if the cloudbox limits are OK with respect to\n"
+          "the atmospheric dimensionality and the limits of the atmosphere,\n"
+          "and that the scattering element variables *pnd_field* and\n"
+          "*scat_data* match in size.\n"
+          "\n"
+          "Further checks on *scat_data_spectral* are performed in \n"
+          "*scat_data_checkedCalcSpectral*\n"
+          "\n"
+          "*scat_species* and *particle_masses* must either be empty or have a\n"
+          "size that matches the other data. If non-empty, some check of these\n"
+          "variables are performed.\n"
+          "\n"
+          "If any test fails, there is an error. Otherwise, *cloudbox_checked*\n"
+          "is set to 1.\n"),
+      AUTHORS("Jakob Doerr", "Patrick Eriksson, Jana Mendrok"),
+      OUT("cloudbox_checked"),
+      GOUT(),
+      GOUT_TYPE(),
+      GOUT_DESC(),
+      IN("atmfields_checked",
+         "atmosphere_dim",
+         "p_grid",
+         "lat_grid",
+         "lon_grid",
+         "z_field",
+         "z_surface",
+         "wind_u_field",
+         "wind_v_field",
+         "wind_w_field",
+         "cloudbox_on",
+         "cloudbox_limits",
+         "pnd_field",
+         "dpnd_field_dx",
+         "jacobian_quantities",
+         "scat_data_spectral",
+         "scat_species",
+         "particle_masses",
+         "abs_species"),
+      GIN("negative_pnd_ok"),
+      GIN_TYPE("Index"),
+      GIN_DEFAULT("0"),
+      GIN_DESC("Flag whether to accept pnd_field < 0.")));
+
+  md_data_raw.push_back(MdRecord(
       NAME("Compare"),
       DESCRIPTION(
           "Checks the consistency between two variables.\n"
@@ -14629,6 +14685,147 @@ void define_md_data_raw() {
                " scattering approximation is assumed to apply).")));
 
   md_data_raw.push_back(MdRecord(
+      NAME("RT4CalcSpectral"),
+      DESCRIPTION(
+          "Interface to the PolRadTran RT4 scattering solver (Evans), "
+          "using spectral scattering data.\n"
+          "\n"
+          "DISCLAIMER: There is a number of known issues with the current\n"
+          "implementation (see below). Use this WSM with care and only if\n"
+          "these limitations/requirements are fulfilled. Results might be\n"
+          "erroneous otherwise.\n"
+          "\n"
+          "RT4 provides the radiation field (*doit_i_field*) from a vector\n"
+          "1D scattering solution assuming a plane-parallel atmosphere (flat\n"
+          "Earth). It calculates up to two Stokes parameters (*stokes_dim*<=2),\n"
+          "i.e., all azimuthally randomly oriented particles are allowed (this\n"
+          "also includes macroscopically isotropic particles). Refraction is\n"
+          "not taken into account.\n"
+          "\n"
+          "The scattering solution is internally obtained over the full\n"
+          "(plane-parallel) atmosphere, i.e. not confined to the cloudbox.\n"
+          "However, the radiation field output is limited to the cloudbox.\n"
+          "This allows to consider clearsky RT through a non-spherical\n"
+          "atmosphere outside the cloudbox improving the RT solution for\n"
+          "non-plane-parallel media compared to the plain RT4 output.\n"
+          "\n"
+          "*nstreams* is the number of polar angles taken into account\n"
+          "internally in the scattering solution. That is, *nstreams*\n"
+          "determines the angular resolution, hence the accuracy, of the\n"
+          "scattering solution. The more anisotropic the bulk scattering\n"
+          "matrix, the more streams are required. The computational burden\n"
+          "increases approximately with the third power of *nstreams*.\n"
+          "The default value (*nstreams*=16) was found to be sufficient for\n"
+          "most microwave scattering calculations. It is likely insufficient\n"
+          "for IR calculations involving ice clouds, though.\n"
+          "\n"
+          "Here, *scat_za_grid* is NOT an input parameter, but output, and its\n"
+          "size equals *nstreams* or *nstreams*+2 (Gauss-Legendre and Double\n"
+          "Gauss quadratures in case *add_straight_angles*=1) (the reason is\n"
+          "that the computational burden is high for additional angles,\n"
+          "regardless whether they are quadrature angles or not; hence the\n"
+          "quadrature angles supplemented with 0 and 180deg are considered to\n"
+          "provide the best radiation field for a given effort).\n"
+          "\n"
+          "The *auto_inc_streams* feature can be used to increase the number\n"
+          "of streams used internally in the scattering solution when found\n"
+          "necessary.\n"
+          "NOTE: this number-of-streams increase is only internally - the\n"
+          "angular dimension of the output *doit_i_field* is fixed to the\n"
+          "*nstreams* given as input to this WSM.\n"
+          "\n"
+          "Quadrature methods available are: 'L'obatto, 'G'auss-Legendre and\n"
+          "'D'ouble Gauss quadrature.\n"
+          "\n"
+          "This WSM applies *surface_rtprop_agenda* to derive reflection\n"
+          "matrix and surface emission vector that are directly feed into\n"
+          "RT4's core solver (instead of their RT4-internal calculation as\n"
+          "used by *RT4CalcWithRT4Surface*).\n"
+          "\n"
+          "Known issues of ARTS implementation:\n"
+          "- Surface altitude is not an interface parameter. Surface is\n"
+          "  implicitly assumed to be at the lowest atmospheric level.\n"
+          "- TOA incoming radiation is so far assumed as blackbody cosmic\n"
+          "  background (temperature taken from the ARTS-internal constant).\n"
+          "- *pfct_method* 'interpolate' currently not implemented here.\n"
+          "\n"
+          "The keyword *pfct_method* allows to choose the method to extract the\n"
+          "scattering matrix. 'interpolate' considers temperature dependence,\n"
+          "others neglect it by chosing one specific temperature grid point\n"
+          "from the single scattering data: 'low' choses the lowest T-point,\n"
+          "'high' the highest T-point, and 'median' the median T-point. As\n"
+          "different scattering elements can have different temperature grids,\n"
+          "the actual temperature value used can differ between the scattering\n"
+          "elements.\n"
+          "Note that this keyword solely affects the scattering matrix;\n"
+          "extinction matrix and absorption vector are always interpolated to\n"
+          "the actual temperature.\n"),
+      AUTHORS("Jana Mendrok"),
+      OUT("doit_i_field", "scat_za_grid", "scat_aa_grid"),
+      GOUT(),
+      GOUT_TYPE(),
+      GOUT_DESC(),
+      IN("atmfields_checked",
+         "atmgeom_checked",
+         "scat_data_checked",
+         "cloudbox_checked",
+         "cloudbox_on",
+         "cloudbox_limits",
+         "propmat_clearsky_agenda",
+         "surface_rtprop_agenda",
+         "atmosphere_dim",
+         "pnd_field",
+         "t_field",
+         "z_field",
+         "vmr_field",
+         "p_grid",
+         "scat_data_spectral",
+         "f_grid",
+         "stokes_dim"),
+      GIN("nstreams",
+          "quad_type",
+          "add_straight_angles",
+          "auto_inc_nstreams",
+          "robust",
+          "za_interp_order",
+          "cos_za_interp",
+          "max_delta_tau"),
+      GIN_TYPE("Index",
+               "String",
+               "Index",
+               "Index",
+               "Index",
+               "Index",
+               "Index",
+               "Numeric"),
+      GIN_DEFAULT("16", "D", "1", "0", "0", "1", "0", "1e-6"),
+      GIN_DESC("Number of polar angle directions (streams) in RT4"
+               " solution (must be an even number).",
+               "Flag which quadrature to apply in RT4 solution (for"
+               " available options see above).",
+               "Flag whether to include nadir and zenith as explicit"
+               " directions (only effective for quad_type G and D).",
+               "Flag whether to internally increase nstreams (individually"
+               " per frequency) if norm of (bulk) scattering matrix is not"
+               " preserved properly. If 0, no adaptation is done. Else"
+               " *auto_inc_nstreams* gives the maximum number of streams to"
+               " increase to. Note that the output *doit_i_field* remains"
+               " with angular dimension of *nstreams*, only the internal"
+               " solution is adapted (and then interpolated to the"
+               " lower-resolution output angular grid).",
+               "For *auto_inc_nstreams*>0, flag whether to not fail even if"
+               " scattering matrix norm is not preserved when maximum stream"
+               " number is reached. Internal RT4 calculations is then"
+               " performed with nstreams=*auto_inc_nstreams*.",
+               "For *auto_inc_nstreams*>0, polar angle interpolation order"
+               " for interpolation from internal increased stream to"
+               " originally requested nstreams-ifield.",
+               "For *auto_inc_nstreams*>0, flag whether to do polar angle"
+               " interpolation in cosine (='mu') space.",
+               "Maximum optical depth of infinitesimal layer (where single"
+               " scattering approximation is assumed to apply).")));
+
+  md_data_raw.push_back(MdRecord(
       NAME("RT4CalcWithRT4Surface"),
       DESCRIPTION(
           "As RT4Calc except for using RT4's proprietary surface type handling.\n"
@@ -14971,6 +15168,7 @@ void define_md_data_raw() {
       AUTHORS("Jana Mendrok"),
       OUT("scat_species",
           "scat_data_raw",
+          "scat_data_spectral_raw",
           "scat_meta",
           "scat_data_checked",
           "pnd_field_raw"),
@@ -15108,6 +15306,42 @@ void define_md_data_raw() {
       GOUT_TYPE(),
       GOUT_DESC(),
       IN("scat_data_raw", "scat_meta"),
+      GIN("scat_data_files"),
+      GIN_TYPE("ArrayOfString"),
+      GIN_DEFAULT(NODEF),
+      GIN_DESC("Array of single scattering data file names.")));
+
+  md_data_raw.push_back(MdRecord(
+      NAME("ScatSpeciesScatAndMetaReadSpectral"),
+      DESCRIPTION(
+          "Reads single scattering data and scattering meta data for one\n"
+          "scattering species.\n"
+          "\n"
+          "This method takes a string array as input containing the location\n"
+          "(path and filename) of the spectral single scattering data. Location of\n"
+          "corresponding scattering meta data is derived applying a naming\n"
+          "convention: ending '.xml*' is replaced by '.meta.xml' (search for\n"
+          "zipped files is done automatically).\n"
+          "\n"
+          "All scattering elements read in one call of the method are assigned\n"
+          "to one and the same scattering species. That is, reading in data for\n"
+          "a bunch of scattering species can be realized by multiple call of\n"
+          "this method. Assignment to scattering species is in the order of the\n"
+          "calls (i.e., first method call reads data for first *scat_species*\n"
+          "entry, second call for second scat_species entry and so on).\n"
+          "Note that no two scattering elements of the same scattering species\n"
+          "are allowed to be equal in size; this will result in an error in\n"
+          "*pnd_fieldCalcFromscat_speciesFields*\n"
+          "\n"
+          "Important note:\n"
+          "The order of the filenames for the single scattering data files has to\n"
+          "exactly correspond to the order of the scattering meta data files.\n"),
+      AUTHORS("Daniel Kreyling, Oliver Lemke, Jana Mendrok, Jakob Doerr"),
+      OUT("scat_data_spectral_raw", "scat_meta"),
+      GOUT(),
+      GOUT_TYPE(),
+      GOUT_DESC(),
+      IN("scat_data_spectral_raw", "scat_meta"),
       GIN("scat_data_files"),
       GIN_TYPE("ArrayOfString"),
       GIN_DEFAULT(NODEF),
@@ -15316,6 +15550,51 @@ void define_md_data_raw() {
                "See *sca_mat_threshold* in *scat_dataCheck*.")));
 
   md_data_raw.push_back(MdRecord(
+      NAME("scat_data_checkedCalcSpectral"),
+      DESCRIPTION(
+          "Checks dimensions, grids and single scattering properties of all\n"
+          "scattering elements in *scat_data_spectral*.\n"
+          "\n"
+          "Dimension and grid equirements:\n"
+          "- The scattering element's f_grid is either identical to *f_grid* or\n"
+          "  of dimension 1.\n"
+          "- In the latter case, the scattering element's f_grid value must\n"
+          "  not deviate from any of the *f_grid* values by more than a\n"
+          "  fraction of *dfrel_threshold*.\n"
+          "- The frequency dimension of pha_mat_data, ext_mat_data, \n"
+          "  abs_vec_data, forward_peak_data and backward_peak_data \n"
+          " (real and imaginary) is either equal to the scattering element's f_grid\n"
+          "  or 1.\n"
+          "- The temperature dimension of pha_mat_data, ext_mat_data,\n"
+          "  abs_vec_data, forward_peak_data and backward_peak_data \n"
+          " (real and imaginary) is either equal to the scattering element's T_grid\n"
+          "  or 1.\n"
+          "- The temperature dimension of ext_mat_data, and abs_vec_data is\n"
+          "  identical.\n"
+          "\n"
+          "The single scattering property contents are checked using\n"
+          "*scat_dataCheck*. For details, see there. The depth of these checks\n"
+          "and their rigour can adapted (see description of parameters\n"
+          "*check_level* and *sca_mat_threshold* in *scat_data_spectralCheck*) or can\n"
+          "be skipped entirely (setting *check_level* to 'none').\n"
+          "NOTE: These test shall only be skipped when one is confident that\n"
+          "the data is correct, e.g. by having run *scat_dataCheck* on the set\n"
+          "of data before, e.g. in a separate ARTS run.\n"),
+      AUTHORS("Jakob Doerr", "Jana Mendrok"),
+      OUT("scat_data_checked"),
+      GOUT(),
+      GOUT_TYPE(),
+      GOUT_DESC(),
+      IN("scat_data_spectral", "f_grid"),
+      GIN("dfrel_threshold", "check_level"),
+      GIN_TYPE("Numeric", "String"),
+      GIN_DEFAULT("0.1", "all"),
+      GIN_DESC("Maximum relative frequency deviation between (single entry)"
+               " scattering element f_grid values and the RT calculation's"
+               " *f_grid*.",
+               "See *check_level* in *scat_data_spectralCheck*.")));
+
+  md_data_raw.push_back(MdRecord(
       NAME("scat_data_monoCalc"),
       DESCRIPTION(
           "Interpolates *scat_data* by frequency to give *scat_data_mono*.\n"),
@@ -15365,6 +15644,25 @@ void define_md_data_raw() {
       GIN_DESC("Interpolation order.")));
 
   md_data_raw.push_back(MdRecord(
+      NAME("scat_data_spectralCalc"),
+      DESCRIPTION(
+          "Prepares *scat_data_spectral* for the scattering solver.\n"
+          "\n"
+          "Derives single scattering data for the frequencies given by\n"
+          "*f_grid* by interpolation from *scat_data_specrtal_raw*. *f_grid* should be\n"
+          "the actual WSV *f_grid* or a single-element Vector.\n"),
+      AUTHORS("Jakob Doerr", "Jana Mendrok"),
+      OUT("scat_data_spectral"),
+      GOUT(),
+      GOUT_TYPE(),
+      GOUT_DESC(),
+      IN("scat_data_spectral_raw", "f_grid"),
+      GIN("interp_order"),
+      GIN_TYPE("Index"),
+      GIN_DEFAULT("1"),
+      GIN_DESC("Interpolation order.")));
+
+  md_data_raw.push_back(MdRecord(
       NAME("scat_dataCheck"),
       DESCRIPTION(
           "Method for checking the validity and consistency of the single\n"
@@ -15397,6 +15695,41 @@ void define_md_data_raw() {
       GIN_DESC("The level of checks to apply on scat_data ('sane' or 'all';"
                " see above).",
                "Threshold for allowed albedo deviation (see above).")));
+
+  md_data_raw.push_back(MdRecord(
+      NAME("scat_data_spectralCheck"),
+      DESCRIPTION(
+          // FIXME: Adjust doc!
+          "Furthermore, by default it is checked that *scat_data_spectral* does not\n"
+          "contain any invalid values and that the scattering matrix is\n"
+          "properly normalized. Proper normalization is defined by the maximum\n"
+          "allowed albedo deviation *sca_mat_threshold* (for details see\n"
+          "*scat_data_spectralCheck*).\n"
+
+          "Method for checking the validity and consistency of the single\n"
+          "scattering properties in *scat_data*.\n"
+          "\n"
+          "This function checks that *scat_data* does not contain any NaN and\n"
+          "that the 'scalar' properties K11, Z11, and a1 are non-negative.\n"
+          "\n"
+          "When *check_type* is 'all', this function checks that the solid\n"
+          "sphere integrated scattering matrix (int_Z11), which is supposed to\n"
+          "be normalized to the scattering cross section, is sufficiently\n"
+          "consistent with the scattering cross section (C_sca) derived from\n"
+          "the difference of extinction (K11) and absorption (a1):\n"
+          "int_z11 ~ C_sca = K11-a1.\n"
+          "The check is skipped if *check_type* is 'sane'.\n"),
+      AUTHORS("Jakob Doerr", "Claudia Emde", "Jana Mendrok"),
+      OUT(),
+      GOUT(),
+      GOUT_TYPE(),
+      GOUT_DESC(),
+      IN("scat_data_spectral"),
+      GIN("check_type"),
+      GIN_TYPE("String"),
+      GIN_DEFAULT("all"),
+      GIN_DESC(
+          "The level of checks to apply on scat_data_spectral (see above).")));
 
   md_data_raw.push_back(MdRecord(
       NAME("scat_dataReduceT"),

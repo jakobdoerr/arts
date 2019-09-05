@@ -270,6 +270,19 @@ void chk_scattering_data(const ArrayOfSingleScatteringData& scat_data,
   }
 }
 
+void chk_spectral_scattering_data(
+    const ArrayOfSpectralSingleScatteringData& scat_data_spectral,
+    const ArrayOfScatteringMetaData& scat_meta,
+    const Verbosity&) {
+  if (scat_data_spectral.nelem() != scat_meta.nelem()) {
+    ostringstream os;
+    os << "The number of elements in in current scat_species'  *scat_data_spectral* and "
+       << "*scat_meta* do not match.\n"
+       << "Each *scat_data_spectral* entry must correspond to one entry in *scat_meta*.";
+    throw runtime_error(os.str());
+  }
+}
+
 //! Check scattering data meta
 /*!
   FIXME
@@ -476,6 +489,136 @@ void chk_scat_data(const SingleScatteringData& scat_data_single,
       last(scat_data_single.T_grid) > 1001.) {
     ostringstream os;
     os << "The temperature values in the single scattering data"
+       << " are negative or very large. Check whether you use the "
+       << "right unit [Kelvin].";
+    throw runtime_error(os.str());
+  }
+}
+
+//! Check spectral single scattering data
+/*!
+  This function checks the self consistency of the data by checking the
+  dimensions of pha_mat, ext_mat and abs_vec depending on the ptype case.
+  It furthermore checks whether the angular grids are defined correctly
+  depending on ptype and the sanity of the temperature grid.
+
+  \param scat_data_single[in]  Single scattering data of a single scattering element
+
+  \author Jakob Doerr
+  \date   2018-02-20
+*/
+void chk_scat_data_spectral(
+    const SpectralSingleScatteringData& scat_data_spectral_single,
+    const Verbosity& verbosity) {
+  CREATE_OUT3;
+
+  assert(scat_data_spectral_single.ptype == PTYPE_GENERAL ||
+         scat_data_spectral_single.ptype == PTYPE_TOTAL_RND ||
+         scat_data_spectral_single.ptype == PTYPE_AZIMUTH_RND);
+
+  // FIXME: Check coeff_inc and coeff_sca??
+
+  ostringstream os_pha_mat;
+  os_pha_mat << "pha_mat ";
+  ostringstream os_ext_mat;
+  os_ext_mat << "ext_mat ";
+  ostringstream os_abs_vec;
+  os_abs_vec << "abs_vec ";
+
+  switch (scat_data_spectral_single.ptype) {
+    case PTYPE_GENERAL:
+
+      out3 << "  Data is for arbitrarily orientated particles. \n";
+
+      chk_size(os_pha_mat.str(),
+               scat_data_spectral_single.pha_mat_data_real,
+               scat_data_spectral_single.f_grid.nelem(),
+               scat_data_spectral_single.T_grid.nelem(),
+               scat_data_spectral_single.coeff_sca.ncols(),
+               scat_data_spectral_single.coeff_inc.ncols(),
+               16);
+      chk_size(os_ext_mat.str(),
+               scat_data_spectral_single.ext_mat_data_real,
+               scat_data_spectral_single.f_grid.nelem(),
+               scat_data_spectral_single.T_grid.nelem(),
+               scat_data_spectral_single.coeff_inc.ncols(),
+               7);
+
+      chk_size(os_abs_vec.str(),
+               scat_data_spectral_single.abs_vec_data_real,
+               scat_data_spectral_single.f_grid.nelem(),
+               scat_data_spectral_single.T_grid.nelem(),
+               scat_data_spectral_single.coeff_inc.ncols(),
+               4);
+      break;
+
+    case PTYPE_TOTAL_RND:
+
+      out3 << "  Data is for macroscopically isotropic and mirror-symmetric "
+           << "scattering media, i.e. for totally randomly oriented particles "
+           << "with at least one plane of symmetry. \n";
+
+      chk_size(os_pha_mat.str(),
+               scat_data_spectral_single.pha_mat_data_real,
+               scat_data_spectral_single.f_grid.nelem(),
+               scat_data_spectral_single.T_grid.nelem(),
+               scat_data_spectral_single.coeff_sca.ncols(),
+               scat_data_spectral_single.coeff_inc.ncols(),
+               6);
+
+      chk_size(os_ext_mat.str(),
+               scat_data_spectral_single.ext_mat_data_real,
+               scat_data_spectral_single.f_grid.nelem(),
+               scat_data_spectral_single.T_grid.nelem(),
+               scat_data_spectral_single.coeff_inc.ncols(),
+               1);
+
+      chk_size(os_abs_vec.str(),
+               scat_data_spectral_single.abs_vec_data_real,
+               scat_data_spectral_single.f_grid.nelem(),
+               scat_data_spectral_single.T_grid.nelem(),
+               scat_data_spectral_single.coeff_inc.ncols(),
+               1);
+      break;
+
+    case PTYPE_AZIMUTH_RND:
+
+      out3 << "  Data is for azimuthally randomly oriented particles. \n";
+
+      chk_size(os_pha_mat.str(),
+               scat_data_spectral_single.pha_mat_data_real,
+               scat_data_spectral_single.f_grid.nelem(),
+               scat_data_spectral_single.T_grid.nelem(),
+               scat_data_spectral_single.coeff_sca.ncols(),
+               scat_data_spectral_single.coeff_inc.ncols(),
+               16);
+
+      chk_size(os_ext_mat.str(),
+               scat_data_spectral_single.ext_mat_data_real,
+               scat_data_spectral_single.f_grid.nelem(),
+               scat_data_spectral_single.T_grid.nelem(),
+               scat_data_spectral_single.coeff_inc.ncols(),
+               3);
+
+      chk_size(os_abs_vec.str(),
+               scat_data_spectral_single.abs_vec_data_real,
+               scat_data_spectral_single.f_grid.nelem(),
+               scat_data_spectral_single.T_grid.nelem(),
+               scat_data_spectral_single.coeff_inc.ncols(),
+               2);
+      break;
+  }
+  // TODO: Check imaginary parts??
+  // Here we only check whether the temperature grid is of the unit K, not
+  // whether it corresponds to the required values in t_field. The second
+  // option is not trivial since here one has to look whether the pnd_field
+  // is non-zero for the corresponding temperature. This check is done in the
+  // functions where the multiplication with the particle number density is
+  // done.
+  if (scat_data_spectral_single.T_grid[0] < 0. ||
+      last(scat_data_spectral_single.T_grid) > 1001.) {
+    ostringstream os;
+    os << "The temperature values in the spectral single scattering data"
        << " are negative or very large. Check whether you use the "
        << "right unit [Kelvin].";
     throw runtime_error(os.str());

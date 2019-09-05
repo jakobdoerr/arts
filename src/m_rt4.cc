@@ -203,6 +203,159 @@ void RT4Calc(Workspace& ws,
 }
 
 /* Workspace method: Doxygen documentation will be auto-generated */
+void RT4CalcSpectral(
+    Workspace& ws,
+    // WS Output:
+    Tensor7& doit_i_field,
+    Vector& scat_za_grid,
+    Vector& scat_aa_grid,
+    // WS Input
+    const Index& atmfields_checked,
+    const Index& atmgeom_checked,
+    const Index& scat_data_checked,
+    const Index& cloudbox_checked,
+    const Index& cloudbox_on,
+    const ArrayOfIndex& cloudbox_limits,
+    const Agenda& propmat_clearsky_agenda,
+    const Agenda& surface_rtprop_agenda,
+    const Index& atmosphere_dim,
+    const Tensor4& pnd_field,
+    const Tensor3& t_field,
+    const Tensor3& z_field,
+    const Tensor4& vmr_field,
+    const Vector& p_grid,
+    const ArrayOfArrayOfSpectralSingleScatteringData& scat_data_spectral,
+    const Vector& f_grid,
+    const Index& stokes_dim,
+    const Index& nstreams,
+    const String& quadtype,
+    const Index& add_straight_angles,
+    //const Numeric& pfct_threshold,
+    const Index& auto_inc_nstreams,
+    const Index& robust,
+    const Index& za_interp_order,
+    const Index& cos_za_interp,
+    const Numeric& max_delta_tau,
+    const Verbosity& verbosity) {
+  if (!cloudbox_on) {
+    CREATE_OUT0;
+    out0 << "  Cloudbox is off, RT4 calculation will be skipped.\n";
+    return;
+  }
+  // FIXME: so far surface is implictly assumed at lowest atmospheric level.
+  // That should be fixed (using z_surface and allowing other altitudes) at some
+  // point.
+
+  const String quad_type = quadtype.toupper();
+  Index nhza, nhstreams, nummu;
+  check_rt4_inputSpectral(nhstreams,
+                          nhza,
+                          nummu,
+                          cloudbox_on,
+                          atmfields_checked,
+                          atmgeom_checked,
+                          cloudbox_checked,
+                          scat_data_checked,
+                          cloudbox_limits,
+                          scat_data_spectral,
+                          atmosphere_dim,
+                          stokes_dim,
+                          nstreams,
+                          quad_type,
+                          add_straight_angles,
+                          pnd_field.ncols());
+  init_ifield(doit_i_field, f_grid, cloudbox_limits, 2 * nummu, stokes_dim);
+
+  // in RT4 mu_values is generally only output. however, we need the values for
+  // preparing the single scattering data at these angles. therefore, we
+  // calculate them here using RT4's proprietary quadrature methods. They
+  // simultaneously provide the quadrature weights, too. We keep them so far,
+  // might use them for ensuring proper normalization in the preparation of the
+  // single scattering data.
+  Vector mu_values(nummu, 0.);
+  Vector quad_weights(nummu, 0.);
+
+  get_quad_angles(mu_values,
+                  quad_weights,
+                  scat_za_grid,
+                  scat_aa_grid,
+                  quad_type,
+                  nhstreams,
+                  nhza,
+                  nummu);
+
+  // Preparing surface setup.
+  //
+
+  // Initializing surface related interface-related RT4 interface parameters.
+  const Index nf = f_grid.nelem();
+
+  // dummy values for parameters not relevant for this ground_type
+  Numeric surface_skin_t = 0.;
+  Vector ground_albedo(nf, 0.);
+  Tensor3 ground_reflec(nf, stokes_dim, stokes_dim, 0.);
+  Complex gidef(1, 0.);
+  ComplexVector ground_index(nf, gidef);
+
+  // parameters that will be updated below
+  Tensor5 surf_refl_mat(nf, nummu, stokes_dim, nummu, stokes_dim, 0.);
+  Tensor3 surf_emis_vec(nf, nummu, stokes_dim, 0.);
+
+  // for now, surface at lowest atm level. later use z_surface or the like
+  // for that.
+  const Numeric surf_altitude = z_field(0, 0, 0);
+  //const Numeric surf_altitude = z_surface(0,0);
+
+  surf_optpropCalc(ws,
+                   surf_refl_mat,
+                   surf_emis_vec,
+                   surface_rtprop_agenda,
+                   f_grid,
+                   scat_za_grid,
+                   mu_values,
+                   quad_weights,
+                   stokes_dim,
+                   surf_altitude);
+
+  run_rt4_spectral(ws,
+                   doit_i_field,
+                   scat_za_grid,
+                   f_grid,
+                   p_grid,
+                   z_field,
+                   t_field,
+                   vmr_field,
+                   pnd_field,
+                   scat_data_spectral,
+                   propmat_clearsky_agenda,
+                   cloudbox_limits,
+                   stokes_dim,
+                   nummu,
+                   nhza,
+                   "A",
+                   surface_skin_t,
+                   ground_albedo,
+                   ground_reflec,
+                   ground_index,
+                   surf_refl_mat,
+                   surf_emis_vec,
+                   surface_rtprop_agenda,
+                   surf_altitude,
+                   quad_type,
+                   mu_values,
+                   quad_weights,
+                   auto_inc_nstreams,
+                   robust,
+                   za_interp_order,
+                   cos_za_interp,
+                   pfct_threshold,
+                   max_delta_tau,
+                   verbosity);
+
+  scat_za_grid_adjust(scat_za_grid, mu_values, nummu);
+}
+
+/* Workspace method: Doxygen documentation will be auto-generated */
 void RT4CalcWithRT4Surface(Workspace& ws,
                            // WS Output:
                            Tensor7& doit_i_field,
@@ -401,6 +554,48 @@ void RT4Calc(Workspace&,
              const Verbosity&) {
   throw runtime_error("This version of ARTS was compiled without RT4 support.");
 }
+
+
+/* Workspace method: Doxygen documentation will be auto-generated */
+void RT4CalcSpectral(Workspace&,
+                     // WS Output:
+                     Tensor7&,
+                     Vector&,
+                     Vector&,
+                     // WS Input
+                     const Index&,
+                     const Index&,
+                     const Index&,
+                     const Index&,
+                     const Index&,
+                     const ArrayOfIndex&,
+                     const Agenda&,
+                     const Agenda&,
+                     const Index&,
+                     const Tensor4&,
+                     const Tensor3&,
+                     const Tensor3&,
+                     const Tensor4&,
+                     const Vector&,
+                     const ArrayOfArrayOfSpectralSingleScatteringData&,
+                     const Vector&,
+                     const Index&,
+                     const Index&,
+                     const String&,
+                     const String&,
+                     const Index&,
+                     const Index&,
+                     //const Numeric&,
+                     const Index&,
+                     const Index&,
+                     const Index&,
+                     const Index&,
+                     const Numeric&,
+                     const Index&,
+                     const Verbosity&) {
+  throw runtime_error("This version of ARTS was compiled without RT4 support.");
+}
+
 /* Workspace method: Doxygen documentation will be auto-generated */
 void RT4CalcWithRT4Surface(Workspace&,
                            // WS Output:

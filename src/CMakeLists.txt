@@ -273,6 +273,7 @@ add_library (artscore STATIC
   propagationmatrix.cc
   propmat_field.cc
   psd.cc
+  spectral.cc
   quantum.cc
   quantum_parser_hitran.cc
   radiation_field.cc
@@ -311,6 +312,14 @@ target_link_libraries (artscore ${ZLIB_LIBRARIES} wigner)
 if (FFTW_FOUND)
   include_directories (${FFTW_INCLUDE_DIR})
   target_link_libraries (artscore ${FFTW_LIBRARIES})
+endif()
+
+if (SHTNS_FOUND)
+  include_directories (${SHTNS_INCLUDE_DIR})
+  target_link_libraries (artscore ${SHTNS_LIBRARIES})
+  if (C_API)
+    target_link_libraries (arts_api ${SHTNS_LIBRARIES})
+  endif()
 endif()
 
 if (NETCDF_FOUND)

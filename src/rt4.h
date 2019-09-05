@@ -77,6 +77,25 @@ void check_rt4_input(  // Output
     const Index& add_straight_angles,
     const Index& pnd_ncols);
 
+void check_rt4_inputSpectral(  // Output
+    Index& nhstreams,
+    Index& nhza,
+    Index& nummu,
+    // Input
+    const Index& cloudbox_on,
+    const Index& atmfields_checked,
+    const Index& atmgeom_checked,
+    const Index& cloudbox_checked,
+    const Index& scat_data_checked,
+    const ArrayOfIndex& cloudbox_limits,
+    const ArrayOfArrayOfSpectralSingleScatteringData& scat_data_spectral,
+    const Index& atmosphere_dim,
+    const Index& stokes_dim,
+    const Index& nstreams,
+    const String& quad_type,
+    const Index& add_straight_angles,
+    const Index& pnd_ncols);
+
 //! Derive the quadrature angles
 /*!
   Derive the quadrature angles related to selected RT4 quadrature type and set
@@ -233,6 +252,44 @@ void run_rt4(Workspace& ws,
              const Numeric& max_delta_tau,
              const Verbosity& verbosity);
 
+void run_rt4_spectral(
+    Workspace& ws,
+    // Output
+    Tensor7& doit_i_field,
+    Vector& scat_za_grid,
+    // Input
+    ConstVectorView f_grid,
+    ConstVectorView p_grid,
+    ConstTensor3View z_field,
+    ConstTensor3View t_field,
+    ConstTensor4View vmr_field,
+    ConstTensor4View pnd_field,
+    const ArrayOfArrayOfSpectralSingleScatteringData& scat_data_spectral,
+    const Agenda& propmat_clearsky_agenda,
+    const ArrayOfIndex& cloudbox_limits,
+    const Index& stokes_dim,
+    const Index& nummu,
+    const Index& nhza,
+    const String& ground_type,
+    const Numeric& surface_skin_t,
+    ConstVectorView ground_albedo,
+    ConstTensor3View ground_reflec,
+    ConstComplexVectorView ground_index,
+    ConstTensor5View surf_refl_mat,
+    ConstTensor3View surf_emis_vec,
+    const Agenda& surface_rtprop_agenda,
+    const Numeric& surf_altitude,
+    const String& quad_type,
+    Vector& mu_values,
+    ConstVectorView quad_weights,
+    const Index& auto_inc_nstreams,
+    const Index& robust,
+    const Index& za_interp_order,
+    const Index& cos_za_interp,
+    const Numeric& pfct_threshold,
+    const Numeric& max_delta_tau,
+    const Verbosity& verbosity);
+
 //! Reset scat_za_grid such that it is consistent with ARTS
 /*!
   Reset scat_za_grid such that it is consistent with ARTS' scat_za_grid
@@ -312,6 +369,19 @@ void par_optpropCalc(  //Output
     const ArrayOfIndex& cloudbox_limits,
     const Index& stokes_dim);
 
+void par_optpropCalcSpectral(  //Output
+    Tensor5View emis_vector,
+    Tensor6View extinct_matrix,
+    //VectorView scatlayers,
+    //Input
+    const ArrayOfArrayOfSpectralSingleScatteringData& scat_data_spectral,
+    const Vector& scat_za_grid,
+    const Index& f_index,
+    ConstTensor4View pnd_field,
+    ConstTensor3View t_field,
+    const ArrayOfIndex& cloudbox_limits,
+    const Index& stokes_dim);
+
 //! Calculates layer (and azimuthal) averaged phase matrix
 /*!
   Calculates layer (and azimuthal) averaged phase matrix (scatter_matrix). This
@@ -360,6 +430,24 @@ void sca_optpropCalc(  //Output
     const Index& pfct_aa_grid_size,
     const Numeric& pfct_threshold,
     const Index& auto_inc_nstreams,
+    const Verbosity& verbosity);
+
+void sca_optpropCalcSpectral(  //Output
+    Tensor6View scatter_matrix,
+    Index& pfct_failed,
+    //Input
+    ConstTensor4View emis_vector,
+    ConstTensor5View extinct_matrix,
+    const Index& f_index,
+    const ArrayOfArrayOfSpectralSingleScatteringData& scat_data_spectral,
+    ConstTensor4View pnd_field,
+    const Index& stokes_dim,
+    const Vector& scat_za_grid,
+    ConstVectorView quad_weights,
+    const Numeric& pfct_threshold,
+    const Index& auto_inc_nstreams,
+    ConstTensor3View t_field,
+    const ArrayOfIndex& cloudbox_limits,
     const Verbosity& verbosity);
 
 //! Calculates bidirectional surface reflection matrices and emission direction
