@@ -169,7 +169,7 @@ void opt_prop_SpecToGrid(  //Output
   \param[in]  ext_matrix_spectral  The extinction matric on the spectral grid
   \param[in]  abs_vector_spectral  The absorption vector on the spectral grid
   \param[in]  dir_array  The discrete angular grid (as pairs of theta and phi)
-  \param[in]  any_m  Flag wether any m coefficients are present
+  \param[in]  any_m  Flag whether any m coefficients are present
 
 
   \author Jakob Doerr
@@ -223,7 +223,7 @@ void pha_mat_SpecToGrid(  //Output
   int nphi_inc = 2 * mmax_inc + 1;  // NPhi has to be bigger than 2*mmax
   int nphi_sca = 2 * mmax_sca + 1;
   int mres = 1;
-  shtns_verbose(0);      // displays informations during initialization.
+  shtns_verbose(0);      // displays information during initialization.
   shtns_use_threads(0);  // enable multi-threaded transforms (if supported).
 
   // Create the two shtns objects for the two transformations
@@ -242,6 +242,7 @@ void pha_mat_SpecToGrid(  //Output
   // Allocate the variable for the product after the first transformation
   Sh = (complex<double>*)fftw_malloc(NSPAT_ALLOC(shtns_inc) *
                                      sizeof(complex<double>));
+
   // Allocate the variable for the product after the second transformation
   Th = (double*)fftw_malloc(NSPAT_ALLOC(shtns_sca) * sizeof(double));
 
@@ -254,6 +255,10 @@ void pha_mat_SpecToGrid(  //Output
   for (Index lat_sca = 0; lat_sca < nlat_sca; lat_sca++) {
     za_grid_sca[lat_sca] = acos(shtns_sca->ct[lat_sca]) / DEG2RAD;
   }
+  Vector aa_grid_sca(nphi_sca, 0);
+  for (Index phi_sca = 0; phi_sca < nphi_sca; phi_sca++) {
+    aa_grid_sca[phi_sca] = 360. / nphi_sca * (double)phi_sca;
+  }
 
   const Index nf = pha_matrix.nvitrines();
   const Index nT = pha_matrix.nshelves();
@@ -265,18 +270,6 @@ void pha_mat_SpecToGrid(  //Output
 
   const Index niDir = idir_array.nrows();
   assert(pha_matrix.npages() == niDir);
-
-  // derive the direction interpolation weights for incoming angles.
-  ArrayOfGridPos idir_gp(niDir);
-  gridpos(idir_gp, za_grid_inc, idir_array(joker, 0));
-  Matrix idir_itw(niDir, 2);  // only interpolating in za, ie 1D linear interpol
-  interpweights(idir_itw, idir_gp);
-
-  // derive the direction interpolation weights for scattered angles.
-  ArrayOfGridPos pdir_gp(npDir);
-  gridpos(pdir_gp, za_grid_sca, pdir_array(joker, 0));
-  Matrix pdir_itw(npDir, 2);  // only interpolating in za, ie 1D linear interpol
-  interpweights(pdir_itw, pdir_gp);
 
   // FIXME: Get rid of this assertion later, b\c it can handle any ptype..
   assert(ptype == PTYPE_TOTAL_RND or ptype == PTYPE_AZIMUTH_RND);
@@ -323,62 +316,158 @@ void pha_mat_SpecToGrid(  //Output
         }
       }
     }
-  } else if (ptype == PTYPE_AZIMUTH_RND)  // ptype azi random (and general)
+  }
+
+  else if (ptype == PTYPE_AZIMUTH_RND)  // ptype azi random (and general)
   {
-    Matrix pha_matrix_temp(nlat_sca, nlat_inc);
-    Matrix pha_matrix_interp(npDir, nlat_inc);
-    ComplexMatrix pha_mat_temp(NLM_sca, nlat_inc);
-    //Index nDir = npDir * niDir;
+    ComplexMatrix pha_mat_singletrans(NLM_sca, nlat_inc * nphi_inc);
+    Matrix pha_matrix_temp(nlat_sca * nphi_sca, nlat_inc * nphi_inc);
     Matrix delta_aa(npDir, niDir);
 
-    for (Index pdir = 0; pdir < npDir; pdir++) {
-      for (Index idir = 0; idir < niDir; idir++) {
-        delta_aa(pdir, idir) =
-            pdir_array(pdir, 1) - idir_array(idir, 1) +
-            (pdir_array(pdir, 1) - idir_array(idir, 1) < -180) * 360 -
-            (pdir_array(pdir, 1) - idir_array(idir, 1) > 180) * 360;
+    // Variables for the trilinear interpolation (phi_sca angles)
+    Index nDir = npDir * niDir;
+    Tensor4 pha_matrix_full_temp(nlat_sca, nphi_sca, nlat_inc, nphi_inc);
+    Vector pha_mat_int(nDir);
+    Matrix dir_itw(nDir, 8);
+
+    ArrayOfGridPos daa_gp(nDir), pza_gp(nDir), iza_gp(nDir);
+    ArrayOfGridPos pza_gp_tmp(npDir), iza_gp_tmp(niDir);
+
+    // Variables for the double linear interpolation (no phi_sca angles)
+    Matrix pha_matrix_interp(npDir, nlat_inc);
+    Matrix idir_itw(niDir, 2);
+    Matrix pdir_itw(npDir, 2);
+
+    ArrayOfGridPos idir_gp(niDir);
+    ArrayOfGridPos pdir_gp(npDir);
+
+    if (any_m_sca) {
+      Vector adelta_aa(nDir);
+
+      gridpos(pza_gp_tmp, za_grid_sca, pdir_array(joker, 0));
+      gridpos(iza_gp_tmp, za_grid_inc, idir_array(joker, 0));
+
+      Index j = 0;
+      for (Index pdir = 0; pdir < npDir; pdir++) {
+        for (Index idir = 0; idir < niDir; idir++) {
+          delta_aa(pdir, idir) =
+              pdir_array(pdir, 1) - idir_array(idir, 1) +
+              (pdir_array(pdir, 1) - idir_array(idir, 1) < -180) * 360 -
+              (pdir_array(pdir, 1) - idir_array(idir, 1) > 180) * 360;
+          adelta_aa[j] = abs(delta_aa(pdir, idir));
+          pza_gp[j] = pza_gp_tmp[pdir];
+          iza_gp[j] = iza_gp_tmp[idir];
+          j++;
+        }
+        gridpos(daa_gp, aa_grid_sca, adelta_aa);
+
+        interpweights(dir_itw, pza_gp, daa_gp, iza_gp);
+      }
+    } else {
+      // derive the direction interpolation weights for incoming angles.
+
+      gridpos(idir_gp, za_grid_inc, idir_array(joker, 0));
+      // only interpolating in za, ie 1D linear interpol
+
+      interpweights(idir_itw, idir_gp);
+      // derive the direction interpolation weights for scattered angles.
+
+      gridpos(pdir_gp, za_grid_sca, pdir_array(joker, 0));
+      // only interpolating in za, ie 1D linear interpol
+      interpweights(pdir_itw, pdir_gp);
+
+      for (Index pdir = 0; pdir < npDir; pdir++) {
+        for (Index idir = 0; idir < niDir; idir++) {
+          delta_aa(pdir, idir) =
+              pdir_array(pdir, 1) - idir_array(idir, 1) +
+              (pdir_array(pdir, 1) - idir_array(idir, 1) < -180) * 360 -
+              (pdir_array(pdir, 1) - idir_array(idir, 1) > 180) * 360;
+        }
       }
     }
+    // --------
+
     for (Index find = 0; find < nf; find++) {
       for (Index Tind = 0; Tind < nT; Tind++) {
         for (Index st1 = 0; st1 < pha_matrix.nrows(); st1++) {
           for (Index st2 = 0; st2 < pha_matrix.ncols(); st2++) {
             for (Index p_lm = 0; p_lm < NLM_sca; p_lm++) {
               for (Index i_lm = 0; i_lm < NLM_inc; i_lm++) {
-                // First spectral transformation (incoming angles)
+                // create the complex coefficients array from the real and
+                // imaginary part
                 Qlm_inc[i_lm] = complex<double>(
                     pha_mat_real_spectral(find, Tind, p_lm, i_lm, st1, st2),
                     pha_mat_imag_spectral(find, Tind, p_lm, i_lm, st1, st2));
               }
-              // Here the first trafo happens.
+              // Here the first transformation happens.
               SH_to_spat_cplx(shtns_inc, Qlm_inc, Sh);
               for (Index idir = 0; idir < nlat_inc; idir++) {
-                pha_mat_temp(p_lm, idir) = Sh[idir];
+                pha_mat_singletrans(p_lm, idir) = Sh[idir];
               }
             }
             for (Index idir = 0; idir < nlat_inc; idir++) {
               for (Index p_lm = 0; p_lm < NLM_sca; p_lm++) {
-                Qlm_sca[p_lm] = pha_mat_temp(p_lm, idir);
+                Qlm_sca[p_lm] = pha_mat_singletrans(p_lm, idir);
               }
               // Here the second trafo happens
               SH_to_spat(shtns_sca, Qlm_sca, Th);
               for (Index pdir = 0; pdir < nlat_sca; pdir++) {
                 pha_matrix_temp(pdir, idir) = Th[pdir];
               }
-              // Interpolate the temporary phase matrix from the native SHTNS
-              // angular grids to the grid specified in the input of this method
-              interp(pha_matrix_interp(joker, idir),
-                     pdir_itw,
-                     pha_matrix_temp(joker, idir),
-                     pdir_gp);
             }
-            for (Index pdir = 0; pdir < npDir; pdir++) {
-              // Interpolate the temporary phase matrix from the native SHTNS
-              // angular grids to the grid specified in the input of this method
-              interp(pha_matrix(find, Tind, pdir, joker, st1, st2),
-                     idir_itw,
-                     pha_matrix_interp(pdir, joker),
-                     idir_gp);
+
+            if (any_m_sca) {
+              // Blow up the temporary phase matrix, so that it has 4 dimensions (za_sca, aa_sca, za_inc, aa_inc)
+              for (Index idx_za_sca = 0; idx_za_sca < nlat_sca; idx_za_sca++) {
+                for (Index idx_aa_sca = 0; idx_aa_sca < nphi_sca;
+                     idx_aa_sca++) {
+                  for (Index idx_za_inc = 0; idx_za_inc < nlat_inc;
+                       idx_za_inc++) {
+                    for (Index idx_aa_inc = 0; idx_aa_inc < nphi_inc;
+                         idx_aa_inc++) {
+                      pha_matrix_full_temp(
+                          idx_za_sca, idx_aa_sca, idx_za_inc, idx_aa_inc) =
+                          pha_matrix_temp(idx_aa_sca * nlat_sca + idx_za_sca,
+                                          idx_aa_inc * nlat_inc + idx_za_inc);
+                    }
+                  }
+                }
+              }
+              // perform the (tri-linear) angle interpolation. but only for the
+              // pha_mat elements that we actually need.
+
+              interp(pha_mat_int,
+                     dir_itw,
+                     pha_matrix_full_temp(joker, joker, joker, 0),
+                     pza_gp,
+                     daa_gp,
+                     iza_gp);
+
+              // sort direction-combined 1D-array back into prop and incident
+              // direction matrix
+              Index i = 0;
+              for (Index pdir = 0; pdir < npDir; pdir++)
+                for (Index idir = 0; idir < niDir; idir++) {
+                  pha_matrix(find, Tind, pdir, idir, st1, st2) = pha_mat_int[i];
+                  i++;
+                }
+            } else {
+              for (Index idir = 0; idir < nlat_inc; idir++) {
+                // Interpolate the temporary phase matrix from the native SHTNS
+                // angular grids to the grid specified in the input of this method
+                interp(pha_matrix_interp(joker, idir),
+                       pdir_itw,
+                       pha_matrix_temp(joker, idir),
+                       pdir_gp);
+              }
+              for (Index pdir = 0; pdir < npDir; pdir++) {
+                // Interpolate the temporary phase matrix from the native SHTNS
+                // angular grids to the grid specified in the input of this method
+                interp(pha_matrix(find, Tind, pdir, joker, st1, st2),
+                       idir_itw,
+                       pha_matrix_interp(pdir, joker),
+                       idir_gp);
+              }
             }
           }
         }

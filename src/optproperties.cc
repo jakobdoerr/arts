@@ -1200,12 +1200,12 @@ void pha_mat_NScatElemsSpectral(  //Output
   Index max_m_inc = 0;
   Index max_nlm_inc;
   Index max_l_inc_local;
-  Index max_m_inc_local;
   Index max_l_sca = 0;
   Index max_m_sca = 0;
   Index max_nlm_sca;
   Index max_l_sca_local;
   Index max_m_sca_local;
+  Index local_index_inc;
   Tensor6 pha_mat_real_temp;
   Tensor6 pha_mat_imag_temp;
   // First find the maximum l and m in the data (sort of a dry run of the loop
@@ -1280,12 +1280,11 @@ void pha_mat_NScatElemsSpectral(  //Output
           (Index)max(scat_data_spectral[i_ss][i_se].coeff_sca(0, joker));
 
       if (any_m_sca) {
-        max_m_sca_local =
-            (Index)max(scat_data_spectral[i_ss][i_se].coeff_sca(1, joker));
         nCoeff_sca = scat_data_spectral[i_ss][i_se].coeff_sca.ncols();
+        max_m_sca_local = max_l_sca_local;
       } else {
-        max_m_sca_local = 0;
         nCoeff_sca = max_l_sca_local + 1;
+        max_m_sca_local = 0;
       }
 
       if (any_m_inc) {
@@ -1323,10 +1322,15 @@ void pha_mat_NScatElemsSpectral(  //Output
       // INCOMING (complex data coefficient mapping)
       //          here we dont need to do complicated mapping b\c higher indices are
       //          coming at the end.
-      // FIXME: Am I doing this right? What if the maximum coefficients array has
-      // m, but the local does not??
       for (Index local_idx_inc = 0; local_idx_inc < nCoeff_inc;
            local_idx_inc++) {
+        // There is one exception: If the local data has no m's but the global has, then the
+        // l's have to be mapped in the following (see DOC)
+        if  (max_l_inc_local==0 && max_l_inc > 0){
+          local_index_inc = local_idx_inc * (local_idx_inc + 1);
+        } else {
+          local_index_inc = local_idx_inc;
+        }
         // SCATTERED (real data coefficient mapping)
         //           here we need some more complicated mapping b\c higher indices
         //           are sorted in between the existing indices
@@ -1340,11 +1344,11 @@ void pha_mat_NScatElemsSpectral(  //Output
             pha_mat_real[i_ss][i_se](
                 joker, joker, global_idx, local_idx_inc, joker, joker) =
                 pha_mat_real_temp(
-                    joker, joker, local_idx_sca, local_idx_inc, joker, joker);
+                    joker, joker, local_idx_sca, local_index_inc, joker, joker);
             pha_mat_imag[i_ss][i_se](
                 joker, joker, global_idx, local_idx_inc, joker, joker) =
                 pha_mat_imag_temp(
-                    joker, joker, local_idx_sca, local_idx_inc, joker, joker);
+                    joker, joker, local_idx_sca, local_index_inc, joker, joker);
           }
         }
       }
